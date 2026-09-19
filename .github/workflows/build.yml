@@ -1,0 +1,25 @@
+name: Compilar plugins
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        plugin: [auth-staff, sync-vinculacion, staff-playtime]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Compilar ${{ matrix.plugin }}
+        run: mvn -B -q -f ${{ matrix.plugin }}/pom.xml package -DskipTests
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.plugin }}-jar
+          path: ${{ matrix.plugin }}/target/*.jar

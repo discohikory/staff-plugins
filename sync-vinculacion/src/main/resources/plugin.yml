@@ -1,0 +1,22 @@
+name: SyncVinculacion
+version: 1.0.0
+main: com.discohikorybrs.syncvinculacion.SyncVinculacion
+api-version: '1.20'
+author: Discohikorybrs
+description: Vincula MC con Discord y sincroniza promote/demote de LuckPerms con roles y nicks de Discord.
+depend: [LuckPerms]
+commands:
+  stafflinkdiscord:
+    description: Vincula tu cuenta con tu Discord del staff.
+    usage: /stafflinkdiscord <id-de-discord>
+  promote:
+    description: Sube de rango a un staff (LuckPerms + Discord).
+    usage: /promote <jugador>
+    permission: sync.admin
+  demote:
+    description: Baja de rango a un staff (LuckPerms + Discord).
+    usage: /demote <jugador>
+    permission: sync.admin
+permissions:
+  sync.admin:
+    default: op

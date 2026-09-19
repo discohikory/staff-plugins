@@ -1,0 +1,18 @@
+name: StaffPlaytime
+version: 1.0.0
+main: com.discohikorybrs.staffplaytime.StaffPlaytime
+api-version: '1.20'
+author: Discohikorybrs
+description: Tiempo de juego como jugador para staffs, con pausa, usos y avisos a Discord.
+depend: [LuckPerms]
+commands:
+  stplaytime:
+    description: Modo jugador por tiempo, pausa y administracion.
+    usage: /stplaytime <tiempo|pause|despause|uses reset <nick>|time reset <nick>>
+    aliases: [splaytime]
+permissions:
+  staffplaytime.use:
+    default: op
+  staffplaytime.admin:
+    description: Resetea usos y tiempos (superior a Manager).
+    default: op

@@ -1,0 +1,41 @@
+# ⚙️ Staff-Playtime — configuración
+# © 2026 Discohikorybrs - Daniel Esteban Vera Fernandez
+
+# Tiempo total de modo jugador por periodo (minutos). 150 = 2h30m
+total-minutes: 150
+# Usos del comando por periodo
+max-uses: 3
+
+# Grupos de LuckPerms que se QUITAN en modo jugador (todos los de staff)
+staff-groups:
+  - helper
+  - jr-mod
+  - mod
+  - sr-mod
+  - t-admin
+  - admin
+  - sr-admin
+  - manager
+# Grupo que se DA en modo jugador (rango normal, sin permisos de staff)
+player-group: "jugador"
+
+discord:
+  token: "PEGA_AQUI_EL_TOKEN"
+  guild-id: "000000000000000000"
+  # Canal de entradas (🩷 entrada-turno) y salidas (🩷 salida-turno)
+  entrada-channel-id: ""
+  salida-channel-id: ""
+
+messages:
+  prefix: "§6[Playtime] §r"
+  no-uses: "§cNo te quedan usos. Pide un reset a un superior."
+  started: "§aModo jugador por {tiempo}. Te quedan {usos} usos."
+  time-up: "§eSe acabó tu tiempo. Permisos de staff restaurados."
+  paused: "§eTiempo pausado. Quedas como jugador hasta reanudar."
+  unpaused: "§aTiempo reanudado. A jugar."
+  not-active: "§cNo tienes tiempo corriendo."
+  already-paused: "§cYa está pausado."
+  not-paused: "§cNo está pausado."
+  uses-reset: "§aUsos reiniciados para {jugador}."
+  time-reset: "§aTiempo reiniciado para {jugador}."
+  remaining: "§eTe quedan {tiempo} de modo jugador ({usos} usos)."

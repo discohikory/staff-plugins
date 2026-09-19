@@ -1,0 +1,32 @@
+# ⚙️ AuthStaff — configuración
+# © 2026 Discohikorybrs - Daniel Esteban Vera Fernandez
+
+# Mundo del lobby al verificar el código
+lobby:
+  world: "world"
+  x: 0.5
+  y: 100.0
+  z: 0.5
+  yaw: 0.0
+  pitch: 0.0
+
+# Si es true, teleporta al lobby al verificar. Si false, verifica donde esté.
+teleport-on-success: true
+# Congelar movimiento hasta verificar (recomendado)
+freeze-until-verified: true
+# Slot del inventario donde se entrega el mapa QR (0-35)
+qr-slot: 4
+# Segundos de validez extra del código (±1 paso de 30s siempre permitido)
+# Nombre del emisor que verá la app (Google/Microsoft Authenticator)
+issuer: "SylenMC-Staff"
+
+messages:
+  prefix: "§6[AuthStaff] §r"
+  need-verify: "§eEscanea el QR de tu inventario con tu app de autenticación."
+  enter-code: "§eEscribe los 6 dígitos en el chat o usa §6/auth menu§e."
+  wrong-code: "§cCódigo incorrecto, intenta de nuevo."
+  success: "§a¡Verificado! Bienvenido al lobby."
+  already: "§aYa estás verificado en esta sesión."
+  new-secret: "§eSe generó tu código nuevo. Escanea el QR otra vez."
+  reset-done: "§aSecreto reiniciado para ese jugador."
+  no-permission: "§cSin permiso."
