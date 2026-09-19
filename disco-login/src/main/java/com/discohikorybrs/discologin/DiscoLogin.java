@@ -89,6 +89,27 @@ public class DiscoLogin extends JavaPlugin implements CommandExecutor {
     void handleJoin(Player p) {
         logged.remove(p.getUniqueId());
         cancelTask(p);
+        removeBar(p);
+        String ip = ipOf(p);
+        AuthManager.Account a = auth.get(p.getName());
+        // Pase entre servidores: ¿ya se logeó en otra modalidad hace poco?
+        if (getConfig().getBoolean("mysql.enabled", false)) {
+            Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+                if (hasRecentSession(p.getUniqueId())) {
+                    Bukkit.getScheduler().runTask(this, () -> {
+                        if (p.isOnline() && !isLogged(p))
+                            forceLogin(p, "§aSesión de la red válida. ¡Hola de nuevo!");
+                    });
+                    return;
+                }
+                Bukkit.getScheduler().runTask(this, () -> premiumOrPrompt(p));
+            });
+            return;
+        }
+        premiumOrPrompt(p);
+    }
+
+    private void premiumOrPrompt(Player p) {
         String ip = ipOf(p);
         AuthManager.Account a = auth.get(p.getName());
         // Premium con auto-login: verifica Mojang en async
@@ -106,6 +127,70 @@ public class DiscoLogin extends JavaPlugin implements CommandExecutor {
             return;
         }
         prompt(p, a, ip);
+    }
+
+    /** ¿Hay sesión fresca de OTRO servidor? */
+    private boolean hasRecentSession(UUID uuid) {
+        java.sql.Connection c = mysqlConn();
+        if (c == null) return false;
+        try {
+            String mine = getConfig().getString("server-name", "lobby");
+            long since = System.currentTimeMillis()
+                    - getConfig().getInt("cross-server-minutes", 10) * 60000L;
+            java.sql.PreparedStatement ps = c.prepareStatement(
+                    "SELECT server FROM disco_sessions WHERE uuid=? AND time>?");
+            ps.setString(1, uuid.toString());
+            ps.setLong(2, since);
+            java.sql.ResultSet rs = ps.executeQuery();
+            while (rs.next()) {
+                if (!mine.equalsIgnoreCase(rs.getString(1))) {
+                    rs.close();
+                    ps.close();
+                    c.close();
+                    return true;
+                }
+            }
+            rs.close();
+            ps.close();
+            c.close();
+        } catch (Exception ignored) {}
+        return false;
+    }
+
+    private void writeSession(UUID uuid) {
+        java.sql.Connection c = mysqlConn();
+        if (c == null) return;
+        try {
+            java.sql.PreparedStatement ps = c.prepareStatement(
+                    "INSERT INTO disco_sessions(uuid,server,time) VALUES(?,?,?) "
+                    + "ON DUPLICATE KEY UPDATE server=VALUES(server), time=VALUES(time)");
+            ps.setString(1, uuid.toString());
+            ps.setString(2, getConfig().getString("server-name", "lobby"));
+            ps.setLong(3, System.currentTimeMillis());
+            ps.executeUpdate();
+            ps.close();
+            c.close();
+        } catch (Exception ignored) {}
+    }
+
+    private java.sql.Connection mysqlConn() {
+        try {
+            Class.forName("com.mysql.cj.jdbc.Driver");
+            String url = "jdbc:mysql://" + getConfig().getString("mysql.host")
+                    + ":" + getConfig().getInt("mysql.port", 3306)
+                    + "/" + getConfig().getString("mysql.database")
+                    + "?useSSL=false&allowPublicKeyRetrieval=true";
+            java.sql.Connection c = java.sql.DriverManager.getConnection(url,
+                    getConfig().getString("mysql.user"),
+                    getConfig().getString("mysql.password"));
+            try (java.sql.Statement st = c.createStatement()) {
+                st.executeUpdate("CREATE TABLE IF NOT EXISTS disco_sessions ("
+                        + "uuid VARCHAR(36) PRIMARY KEY, server VARCHAR(32), time BIGINT)");
+            }
+            return c;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private void prompt(Player p, AuthManager.Account a, String ip) {
@@ -169,6 +254,10 @@ public class DiscoLogin extends JavaPlugin implements CommandExecutor {
         cancelTask(p);
         removeBar(p);
         auth.touch(p.getName(), ipOf(p));
+        if (getConfig().getBoolean("mysql.enabled", false)) {
+            final UUID id = p.getUniqueId();
+            Bukkit.getScheduler().runTaskAsynchronously(this, () -> writeSession(id));
+        }
         new LoginListener(this).unfreeze(p);
         p.sendMessage(hello);
         // Avisar a AuthStaff (si está) para que inicie el 2FA tras el logeo

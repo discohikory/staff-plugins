@@ -11,6 +11,19 @@ max-accounts-per-ip: 3
 session-days: 0
 # Premium entra sin clave (verifica con Mojang). Bedrock (.) nunca es premium.
 premium-auto-login: true
+# Nombre de este servidor (lobby, survival...) para sesiones compartidas
+server-name: "lobby"
+# Sesiones entre servidores (MySQL): logeado en uno = logeado en todos.
+# Solo pide /login al INGRESAR a la red, no al cambiar de modalidad.
+mysql:
+  enabled: false
+  host: "localhost"
+  port: 3306
+  database: "s2823_luckperms"
+  user: "root"
+  password: ""
+# Minutos que dura el pase entre servidores
+cross-server-minutes: 10
 # Congelar movimiento y vista hasta logearse
 freeze: true
 # Efecto ceguera hasta logearse
