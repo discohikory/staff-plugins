@@ -2,17 +2,11 @@ package com.discohikorybrs.syncvinculacion;
 
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
-import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.User;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
-import net.dv8tion.jda.api.events.interaction.component.StringSelectInteractionEvent;
-import net.dv8tion.jda.api.hooks.ListenerAdapter;
-import net.dv8tion.jda.api.interactions.components.ActionRow;
-import net.dv8tion.jda.api.interactions.components.selections.SelectOption;
-import net.dv8tion.jda.api.interactions.components.selections.StringSelectMenu;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.LuckPermsProvider;
@@ -73,7 +67,6 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
                 jda = JDABuilder.createDefault(token,
                                 GatewayIntent.GUILD_MEMBERS, GatewayIntent.GUILD_MESSAGES,
                                 GatewayIntent.DIRECT_MESSAGES)
-                        .addEventListeners(new RankListener())
                         .build().awaitReady();
                 getLogger().info("Discord conectado como " + jda.getSelfUser().getAsTag());
             } catch (Exception e) {
@@ -83,7 +76,55 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
         getCommand("stafflinkdiscord").setExecutor(this);
         getCommand("promote").setExecutor(this);
         getCommand("demote").setExecutor(this);
+        menu = new RankMenu(this);
+        getServer().getPluginManager().registerEvents(menu, this);
         getLogger().info("SyncVinculacion v1.0.0 por Discohikorybrs activado.");
+    }
+
+    private RankMenu menu;
+
+    /** Vista de la escalera para el menú. */
+    public java.util.List<Rank> ladderView() {
+        return ladder;
+    }
+
+    /** Aplica el rango elegido: LuckPerms + Discord + aviso en el canal sync. */
+    public void applyRank(CommandSender executor, String mc, String dcId, int idx, boolean up) {
+        if (idx < 0 || idx >= ladder.size()) return;
+        Rank newR = ladder.get(idx);
+        OfflinePlayer t = Bukkit.getOfflinePlayer(mc);
+        UserManager um = luckPerms.getUserManager();
+        um.loadUser(t.getUniqueId()).thenAcceptAsync(u -> {
+            for (Rank r : ladder) u.data().remove(Node.builder("group." + r.group).build());
+            u.data().add(Node.builder("group." + newR.group).build());
+            um.saveUser(u);
+        });
+        syncDiscord(dcId, mc, null, newR);
+        String out = msg(up ? "promoted" : "demoted")
+                .replace("{jugador}", mc).replace("{rango}", newR.display);
+        executor.sendMessage(out);
+        logPromote(executor instanceof Player ? executor.getName() : "consola", mc, newR, up);
+    }
+
+    /** Publica el cambio en #sincronizacion-discord. */
+    private void logPromote(String by, String mc, Rank newR, boolean up) {
+        if (jda == null) return;
+        String guildId = getConfig().getString("discord.guild-id", "");
+        String chId = getConfig().getString("discord.sync-channel-id", "");
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            try {
+                Guild g = jda.getGuildById(guildId);
+                if (g == null) return;
+                TextChannel ch = g.getTextChannelById(chId);
+                if (ch == null) return;
+                ch.sendMessageEmbeds(new net.dv8tion.jda.api.EmbedBuilder()
+                        .setTitle((up ? "📈 Promoteado: " : "📉 Demoteado: ") + mc)
+                        .setDescription("Nuevo rango: **" + newR.display + "**\nPor: **" + by + "**")
+                        .setColor(up ? 0x2effa1 : 0xff2d55).build()).queue();
+            } catch (Exception e) {
+                getLogger().warning("No se pudo avisar en sync: " + e.getMessage());
+            }
+        });
     }
 
     /** Busca el Discord ID vinculado a un nick de MC (ignora mayúsculas). */
@@ -218,6 +259,10 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
                 s.sendMessage("§eUso: /" + name + " <jugador>");
                 return true;
             }
+            if (!(s instanceof Player)) {
+                s.sendMessage("§cEste comando abre un menú: úsalo en el juego.");
+                return true;
+            }
             boolean up = name.equals("promote");
             String mc = a[0];
             String dcId = discordOf(mc);
@@ -225,106 +270,17 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
                 s.sendMessage(msg("need-link-many").replace("{jugador}", mc));
                 return true;
             }
-            postRankPicker(s, mc, dcId, up);
+            Player p = (Player) s;
+            // Rango actual para marcarlo en el menú
+            luckPerms.getUserManager().loadUser(Bukkit.getOfflinePlayer(mc).getUniqueId())
+                    .thenAcceptAsync(u -> {
+                        int c = currentRank(u);
+                        Bukkit.getScheduler().runTask(this, () ->
+                                menu.open(p, mc, dcId, up, c));
+                    });
             return true;
         }
         return false;
-    }
-
-    /** Publica el selector de rangos en #sincronizacion-discord. */
-    private void postRankPicker(CommandSender s, String mc, String dcId, boolean up) {
-        if (jda == null) {
-            s.sendMessage("§cBot de Discord no conectado. Revisa el token.");
-            return;
-        }
-        String execDc = (s instanceof Player) ? discordOf(s.getName()) : null;
-        String guildId = getConfig().getString("discord.guild-id", "");
-        String chId = getConfig().getString("discord.sync-channel-id", "");
-        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
-            try {
-                Guild g = jda.getGuildById(guildId);
-                if (g == null) {
-                    sendSync(s, "§cServidor de Discord no encontrado en config.");
-                    return;
-                }
-                TextChannel ch = g.getTextChannelById(chId);
-                if (ch == null) {
-                    sendSync(s, "§cCanal de sincronización no configurado.");
-                    return;
-                }
-                net.dv8tion.jda.api.EmbedBuilder eb =
-                        new net.dv8tion.jda.api.EmbedBuilder()
-                        .setTitle((up ? "📈 Promotear a " : "📉 Demotear a ") + mc)
-                        .setDescription("Solicitado por **"
-                                + (s instanceof Player ? s.getName() : "consola")
-                                + "**. Elige el rango destino:")
-                        .setColor(up ? 0x2effa1 : 0xff2d55);
-                StringSelectMenu.Builder menu = StringSelectMenu
-                        .create("rankpick:" + (up ? "up" : "down") + ":" + mc + ":" + (execDc == null ? "-" : execDc))
-                        .setPlaceholder("Selecciona el rango...")
-                        .setRequiredRange(1, 1);
-                for (int i = 0; i < ladder.size(); i++) {
-                    Rank r = ladder.get(i);
-                    menu.addOptions(SelectOption.of(r.display, String.valueOf(i))
-                            .withDescription("Nivel " + (i + 1)));
-                }
-                ch.sendMessageEmbeds(eb.build())
-                        .setComponents(ActionRow.of(menu.build())).queue(
-                                ok -> sendSync(s, "§aSelector publicado en #sincronizacion-discord."),
-                                err -> sendSync(s, "§cNo pude publicar: " + err.getMessage()));
-            } catch (Exception e) {
-                sendSync(s, "§cError: " + e.getMessage());
-            }
-        });
-    }
-
-    private void sendSync(CommandSender s, String m) {
-        Bukkit.getScheduler().runTask(this, () -> s.sendMessage(m));
-    }
-
-    /** Aplica el rango elegido desde el selector de Discord. */
-    private class RankListener extends ListenerAdapter {
-        @Override
-        public void onStringSelectInteraction(StringSelectInteractionEvent e) {
-            if (!e.getComponentId().startsWith("rankpick:")) return;
-            String[] p = e.getComponentId().split(":", 4);
-            if (p.length < 4) return;
-            boolean up = p[1].equals("up");
-            String mc = p[2];
-            String execDc = p[3];
-            Member clicker = e.getMember();
-            boolean allowed = clicker != null && (clicker.getId().equals(execDc)
-                    || clicker.hasPermission(Permission.ADMINISTRATOR));
-            if (!allowed) {
-                e.reply("⛔ Solo quien pidió el cambio o un administrador.").setEphemeral(true).queue();
-                return;
-            }
-            int idx;
-            try {
-                idx = Integer.parseInt(e.getValues().get(0));
-            } catch (Exception ex) {
-                return;
-            }
-            if (idx < 0 || idx >= ladder.size()) return;
-            Rank newR = ladder.get(idx);
-            Bukkit.getScheduler().runTask(SyncVinculacion.this, () -> {
-                OfflinePlayer t = Bukkit.getOfflinePlayer(mc);
-                // Quita todos los grupos de la escalera y pone el elegido
-                UserManager um = luckPerms.getUserManager();
-                um.loadUser(t.getUniqueId()).thenAcceptAsync(u -> {
-                    for (Rank r : ladder) u.data().remove(Node.builder("group." + r.group).build());
-                    u.data().add(Node.builder("group." + newR.group).build());
-                    um.saveUser(u);
-                });
-                String dcId = discordOf(mc);
-                syncDiscord(dcId, mc, null, newR);
-                e.editMessageEmbeds(new net.dv8tion.jda.api.EmbedBuilder()
-                        .setTitle((up ? "📈 Promoteado: " : "📉 Demoteado: ") + mc)
-                        .setDescription("Nuevo rango: **" + newR.display + "**\nElegido por " + clicker.getAsMention())
-                        .setColor(up ? 0x2effa1 : 0xff2d55).build())
-                        .setComponents().queue();
-            });
-        }
     }
 
     /** ID de Discord vinculado a un UUID de MC (para otros plugins). */

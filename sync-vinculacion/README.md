@@ -1,7 +1,7 @@
 # 🔗 Sync-Vinculación v1.0.0 — MC ↔ Discord + promote/demote
 
 - `/stafflinkdiscord <tu-id>` vincula tu MC con tu Discord del staff (nick + MD de confirmación).
-- `/promote <jugador>` y `/demote <jugador>` publican un **selector de rangos en #sincronizacion-discord**: eliges el rango destino y se aplica en **LuckPerms + Discord** (rol + nick `{rango} {mc}` + MD).
+- `/promote <nick>` y `/demote <nick>` abren un **menú decorado en juego** con todos los rangos (marca el actual): eliges el destino y se aplica en **LuckPerms + Discord** (rol + nick `{rango} {mc}` + MD), y se publica en **#sincronizacion-discord**.
 
 ## Requisitos
 - Paper 1.20+ · Java 17+ · **LuckPerms** · bot de Discord con permiso Gestionar roles/nicks (rol del bot arriba de los de staff)
