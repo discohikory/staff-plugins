@@ -9,6 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         plugin: [auth-staff, sync-vinculacion, staff-playtime]
     steps:

@@ -56,7 +56,10 @@ public class AuthStaff extends JavaPlugin implements Listener, CommandExecutor {
         if (authMePresent) {
             try {
                 Class<?> ev = Class.forName("fr.xephi.authme.events.LoginEvent");
-                getServer().getPluginManager().registerEvent(ev, this,
+                @SuppressWarnings("unchecked")
+                Class<? extends org.bukkit.event.Event> evClass =
+                        (Class<? extends org.bukkit.event.Event>) ev;
+                getServer().getPluginManager().registerEvent(evClass, this,
                         org.bukkit.event.EventPriority.NORMAL,
                         (listener, event) -> {
                             try {
