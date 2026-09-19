@@ -30,7 +30,7 @@ public class RankMenu implements Listener {
     }
 
     private static final Material[] WOOLS = {
-            Material.LIME_WOOL, Material.GREEN_WOOL, Material.TEAL_WOOL,
+            Material.LIME_WOOL, Material.GREEN_WOOL, Material.LIGHT_GRAY_WOOL,
             Material.CYAN_WOOL, Material.LIGHT_BLUE_WOOL, Material.BLUE_WOOL,
             Material.PURPLE_WOOL, Material.MAGENTA_WOOL, Material.PINK_WOOL,
             Material.ORANGE_WOOL, Material.YELLOW_WOOL, Material.RED_WOOL,
