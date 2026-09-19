@@ -7,8 +7,8 @@ login-timeout: 120
 min-password-length: 5
 # Cuentas máximas por IP
 max-accounts-per-ip: 3
-# Días que dura la sesión recordada por IP (0 = desactivado)
-session-days: 7
+# Sesiones recordadas DESACTIVADAS: siempre pide clave al entrar.
+session-days: 0
 # Premium entra sin clave (verifica con Mojang). Bedrock (.) nunca es premium.
 premium-auto-login: true
 # Congelar movimiento y vista hasta logearse

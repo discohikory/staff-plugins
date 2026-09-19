@@ -90,16 +90,10 @@ public class DiscoLogin extends JavaPlugin implements CommandExecutor {
 
     private void prompt(Player p, AuthManager.Account a, String ip) {
         if (!p.isOnline()) return;
+        // Sin sesión recordada: siempre pedir clave al entrar
         if (a == null) {
             p.sendMessage(msg("need-register"));
         } else {
-            int days = getConfig().getInt("session-days", 7);
-            long maxAge = days * 86400000L;
-            if (days > 0 && ip.equals(a.ip)
-                    && System.currentTimeMillis() - a.lastLogin < maxAge) {
-                forceLogin(p, msg("session"));
-                return;
-            }
             p.sendMessage(msg("need-login"));
         }
         int timeout = getConfig().getInt("login-timeout", 120);
