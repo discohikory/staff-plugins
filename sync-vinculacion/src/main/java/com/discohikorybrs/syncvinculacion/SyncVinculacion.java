@@ -194,7 +194,65 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
         });
     }
 
-    /** Actualiza Discord: quita rol viejo, da rol nuevo y pone nick. Corre en async. */
+    /** Embed de vinculación estilo premium: canal sync + MD, en español. */
+    private void postLinkEmbed(String mc, String dcId) {
+        if (jda == null) return;
+        String guildId = getConfig().getString("discord.guild-id", "");
+        String chId = getConfig().getString("discord.sync-channel-id", "");
+        java.util.List<String> pings = getConfig().getStringList("discord.link-ping-role-ids");
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            try {
+                Guild g = jda.getGuildById(guildId);
+                if (g == null) return;
+                Member m;
+                try {
+                    m = g.retrieveMemberById(dcId).complete();
+                } catch (Exception e) {
+                    return;
+                }
+                if (m == null) return;
+                final Member member = m;
+                // Rango actual en la escalera
+                luckPerms.getUserManager().loadUser(Bukkit.getOfflinePlayer(mc).getUniqueId())
+                        .thenAcceptAsync(u -> {
+                            int cur = currentRank(u);
+                            String rank = cur >= 0 ? ladder.get(cur).display : "Sin rango";
+                            StringBuilder ping = new StringBuilder();
+                            for (String roleId : pings) {
+                                Role r = g.getRoleById(roleId);
+                                if (r != null) ping.append(r.getAsMention()).append(" ");
+                            }
+                            String head = "https://minotar.net/helm/"
+                                    + mc + "/100.png";
+                            net.dv8tion.jda.api.EmbedBuilder eb =
+                                    new net.dv8tion.jda.api.EmbedBuilder()
+                                    .setTitle("🔗 Cuenta de Discord vinculada")
+                                    .addField("Usuario de Minecraft", "`" + mc + "`", false)
+                                    .addField("Usuario de Discord", member.getAsMention(), false)
+                                    .addField("Rango Staff", "`" + rank + "`", false)
+                                    .addField("La cuenta de Discord se vinculó correctamente.",
+                                            "👤 Minecraft  💬 Discord  🛡️ Rango\n**"
+                                            + mc + "**  " + member.getAsMention()
+                                            + "  `" + rank + "`", false)
+                                    .setThumbnail(head)
+                                    .setFooter("SylenMC Network • Vinculación de cuentas")
+                                    .setTimestamp(java.time.Instant.now())
+                                    .setColor(0x2effa1);
+                            TextChannel ch = g.getTextChannelById(chId);
+                            if (ch != null) {
+                                String pre = ping.toString().trim();
+                                if (pre.isEmpty()) ch.sendMessageEmbeds(eb.build()).queue();
+                                else ch.sendMessage(pre).setEmbeds(eb.build()).queue();
+                            }
+                            member.getUser().openPrivateChannel().queue(
+                                    pc -> pc.sendMessageEmbeds(eb.build()).queue(null, e -> {}),
+                                    e -> {});
+                        });
+            } catch (Exception e) {
+                getLogger().warning("Embed de vínculo: " + e.getMessage());
+            }
+        });
+    }
     private void syncDiscord(String discordId, String mcName, Rank oldR, Rank newR) {
         if (jda == null || discordId == null) return;
         String guildId = getConfig().getString("discord.guild-id", "");
@@ -244,13 +302,7 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
             links.set(p.getUniqueId() + ".mc", p.getName());
             saveLinks();
             p.sendMessage(msg("linked"));
-            // Aviso por MD si el bot ya está conectado
-            if (jda != null) {
-                jda.retrieveUserById(a[0]).queue(u ->
-                        u.openPrivateChannel().queue(ch ->
-                                ch.sendMessage("🔗 Vinculado con **" + p.getName()
-                                        + "** en el servidor.").queue(null, e -> {}), e -> {}));
-            }
+            postLinkEmbed(p.getName(), a[0]);
             return true;
         }
 

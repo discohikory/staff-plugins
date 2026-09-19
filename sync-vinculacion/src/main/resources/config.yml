@@ -8,6 +8,9 @@ discord:
   guild-id: "000000000000000000"
   # Canal donde sale el selector de rangos (sincronizacion-discord)
   sync-channel-id: "1550726113662210159"
+  # Roles a mencionar al vincular (ej: Management). Vacío = sin mención.
+  link-ping-role-ids:
+    - "1550507371514691635"
   # Formato del nick en Discord: {rango} y {mc} disponibles
   nickname-format: "{rango} {mc}"
 
