@@ -129,7 +129,24 @@ public class AuthStaff extends JavaPlugin implements Listener, CommandExecutor {
     }
 
     public boolean requires(Player p) {
-        return p.hasPermission("authstaff.required") && !p.hasPermission("authstaff.admin");
+        if (!p.hasPermission("authstaff.required") || p.hasPermission("authstaff.admin")) return false;
+        // Premium con MC comprado no hace 2FA (ya lo asegura Mojang)
+        return !isPremiumMc(p);
+    }
+
+    /** ¿Tiene la cuenta marcada como premium en DiscoLogin? */
+    private boolean isPremiumMc(Player p) {
+        try {
+            org.bukkit.plugin.Plugin dl = getServer().getPluginManager().getPlugin("DiscoLogin");
+            if (dl == null) return false;
+            Object am = dl.getClass().getMethod("auth").invoke(dl);
+            Object acc = am.getClass().getMethod("get", String.class).invoke(am, p.getName());
+            if (acc == null) return false;
+            java.lang.reflect.Field f = acc.getClass().getField("premium");
+            return f.getBoolean(acc);
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     public boolean isVerified(Player p) {

@@ -118,6 +118,9 @@ public class DiscoLogin extends JavaPlugin implements CommandExecutor {
                 if (AuthManager.isPremium(p.getName())) {
                     Bukkit.getScheduler().runTask(this, () -> {
                         if (!p.isOnline()) return;
+                        AuthManager.Account acc = auth.get(p.getName());
+                        auth.save(p.getName(), acc == null ? "" : acc.hash,
+                                acc == null ? "" : acc.salt, ipOf(p), true);
                         forceLogin(p, msg("premium-welcome"));
                     });
                 } else {
