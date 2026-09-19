@@ -16,6 +16,8 @@ teleport-on-success: true
 freeze-until-verified: true
 # Slot del inventario donde se entrega el mapa QR (0-35)
 qr-slot: 4
+# Abre el menú automáticamente al entregar el QR
+auto-open-menu: true
 # Muestra la clave manual para escribirla en la app (Google/Microsoft)
 show-manual-key: true
 # Re-entrega el mapa si lo mueven o lo pierden (segundos, 0 = off)

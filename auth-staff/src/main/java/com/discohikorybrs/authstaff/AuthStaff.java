@@ -227,6 +227,12 @@ public class AuthStaff extends JavaPlugin implements Listener, CommandExecutor {
             p.sendMessage(msg("manual-key").replace("{key}", grouped));
         }
         p.sendMessage(msg("enter-code"));
+        getLogger().info("2FA iniciado para " + p.getName());
+        if (getConfig().getBoolean("auto-open-menu", true)) {
+            Bukkit.getScheduler().runTaskLater(this, () -> {
+                if (p.isOnline() && requires(p) && !isVerified(p)) menu.open(p);
+            }, 20L);
+        }
         scheduleRegive(p);
     }
 
