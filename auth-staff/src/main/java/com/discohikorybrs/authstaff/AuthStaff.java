@@ -53,6 +53,7 @@ public class AuthStaff extends JavaPlugin implements Listener, CommandExecutor {
         getCommand("auth").setExecutor(this);
 
         authMePresent = getServer().getPluginManager().getPlugin("AuthMe") != null;
+        hookDiscoLogin();
         if (authMePresent) {
             try {
                 Class<?> ev = Class.forName("fr.xephi.authme.events.LoginEvent");
@@ -92,6 +93,41 @@ public class AuthStaff extends JavaPlugin implements Listener, CommandExecutor {
         return "players." + u + ".secret";
     }
 
+    private final java.util.Map<UUID, Integer> regiveTasks = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Escucha el login de DiscoLogin (sin dependencia dura). */
+    private void hookDiscoLogin() {
+        try {
+            Class<?> ev = Class.forName("com.discohikorybrs.discologin.DiscoLoginSuccessEvent");
+            @SuppressWarnings("unchecked")
+            Class<? extends org.bukkit.event.Event> evClass =
+                    (Class<? extends org.bukkit.event.Event>) ev;
+            getServer().getPluginManager().registerEvent(evClass, this,
+                    org.bukkit.event.EventPriority.NORMAL,
+                    (listener, event) -> {
+                        try {
+                            Method m = ev.getMethod("getPlayer");
+                            Player p = (Player) m.invoke(event);
+                            Bukkit.getScheduler().runTask(this, () -> startFlow(p));
+                        } catch (Exception ignored) {}
+                    }, this);
+            getLogger().info("DiscoLogin detectado: el 2FA inicia tras el /login.");
+        } catch (Exception ignored) {}
+    }
+
+    /** ¿El jugador ya pasó el login? Si no hay DiscoLogin, siempre true. */
+    private boolean isDiscoLogged(Player p) {
+        try {
+            org.bukkit.plugin.Plugin dl = getServer().getPluginManager().getPlugin("DiscoLogin");
+            if (dl == null) return true;
+            Method m = dl.getClass().getMethod("isLogged", Player.class);
+            Object r = m.invoke(dl, p);
+            return r instanceof Boolean && (Boolean) r;
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
     public boolean requires(Player p) {
         return p.hasPermission("authstaff.required") && !p.hasPermission("authstaff.admin");
     }
@@ -120,6 +156,33 @@ public class AuthStaff extends JavaPlugin implements Listener, CommandExecutor {
     public void onQuit(PlayerQuitEvent e) {
         verified.remove(e.getPlayer().getUniqueId());
         menu.clear(e.getPlayer().getUniqueId());
+        Integer t = regiveTasks.remove(e.getPlayer().getUniqueId());
+        if (t != null) Bukkit.getScheduler().cancelTask(t);
+    }
+
+    /** Bloquea mover/soltar el mapa QR hasta verificar. */
+    @EventHandler
+    public void onQrMove(org.bukkit.event.inventory.InventoryClickEvent e) {
+        if (!(e.getWhoClicked() instanceof Player)) return;
+        Player p = (Player) e.getWhoClicked();
+        if (!requires(p) || isVerified(p)) return;
+        if (!getConfig().getBoolean("lock-map-slot", true)) return;
+        org.bukkit.inventory.ItemStack it = e.getCurrentItem();
+        if (isOurMap(it)) e.setCancelled(true);
+    }
+
+    @EventHandler
+    public void onQrDrop(org.bukkit.event.player.PlayerDropItemEvent e) {
+        Player p = e.getPlayer();
+        if (!requires(p) || isVerified(p)) return;
+        if (!getConfig().getBoolean("lock-map-slot", true)) return;
+        if (isOurMap(e.getItemDrop().getItemStack())) e.setCancelled(true);
+    }
+
+    private boolean isOurMap(org.bukkit.inventory.ItemStack it) {
+        if (it == null || it.getType() != org.bukkit.Material.FILLED_MAP) return false;
+        return it.hasItemMeta() && it.getItemMeta().hasDisplayName()
+                && it.getItemMeta().getDisplayName().contains("Código QR 2FA");
     }
 
     @EventHandler
@@ -149,6 +212,7 @@ public class AuthStaff extends JavaPlugin implements Listener, CommandExecutor {
     /** Inicia el flujo: genera secreto si no existe y entrega el mapa QR. */
     public void startFlow(Player p) {
         if (!requires(p) || isVerified(p) || !p.isOnline()) return;
+        if (!isDiscoLogged(p)) return; // Espera al /login de DiscoLogin
         String secret = data.getString(key(p.getUniqueId()));
         if (secret == null) {
             secret = TotpUtil.generateSecret();
@@ -158,7 +222,35 @@ public class AuthStaff extends JavaPlugin implements Listener, CommandExecutor {
         String uri = TotpUtil.otpAuthUri(secret, p.getName(), getConfig().getString("issuer", "Staff"));
         QrMapUtil.giveQrMap(this, p, uri);
         p.sendMessage(msg("need-verify"));
+        if (getConfig().getBoolean("show-manual-key", true)) {
+            String grouped = secret.replaceAll("(.{4})", "$1 ").trim();
+            p.sendMessage(msg("manual-key").replace("{key}", grouped));
+        }
         p.sendMessage(msg("enter-code"));
+        scheduleRegive(p);
+    }
+
+    /** Re-entrega el mapa si lo mueven o lo pierden, hasta verificar. */
+    private void scheduleRegive(Player p) {
+        Integer old = regiveTasks.remove(p.getUniqueId());
+        if (old != null) Bukkit.getScheduler().cancelTask(old);
+        int secs = getConfig().getInt("map-regive-seconds", 3);
+        if (secs <= 0) return;
+        final String sec = data.getString(key(p.getUniqueId()));
+        int id = Bukkit.getScheduler().runTaskTimer(this, () -> {
+            if (!p.isOnline() || !requires(p) || isVerified(p)) {
+                Integer t = regiveTasks.remove(p.getUniqueId());
+                if (t != null) Bukkit.getScheduler().cancelTask(t);
+                return;
+            }
+            int slot = getConfig().getInt("qr-slot", 4);
+            if (!isOurMap(p.getInventory().getItem(slot))) {
+                String uri = TotpUtil.otpAuthUri(sec, p.getName(),
+                        getConfig().getString("issuer", "Staff"));
+                QrMapUtil.giveQrMap(this, p, uri);
+            }
+        }, secs * 20L, secs * 20L).getTaskId();
+        regiveTasks.put(p.getUniqueId(), id);
     }
 
     /** Valida un código de 6 dígitos. */
@@ -176,6 +268,8 @@ public class AuthStaff extends JavaPlugin implements Listener, CommandExecutor {
         if (TotpUtil.verify(secret, code)) {
             verified.put(p.getUniqueId(), true);
             menu.clear(p.getUniqueId());
+            Integer t = regiveTasks.remove(p.getUniqueId());
+            if (t != null) Bukkit.getScheduler().cancelTask(t);
             removeQrMap(p);
             p.sendMessage(msg("success"));
             if (getConfig().getBoolean("teleport-on-success", true)) {

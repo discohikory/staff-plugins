@@ -10,14 +10,17 @@ import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.inventory.meta.SkullMeta;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Menú interactivo de 6 dígitos: clic izq +1, clic der -1, confirmar con lana verde.
+ * Menú interactivo de 6 dígitos con CABEZAS numeradas 0-9.
+ * Clic izquierdo +1, clic derecho -1, confirma con el bloque verde.
  * © 2026 Discohikorybrs - Daniel Esteban Vera Fernandez.
  */
 public class CodeMenu implements Listener {
@@ -39,31 +42,56 @@ public class CodeMenu implements Listener {
         player.openInventory(inv);
     }
 
+    private ItemStack headFor(int digitPos, int value) {
+        ItemStack head = new ItemStack(Material.PLAYER_HEAD);
+        SkullMeta meta = (SkullMeta) head.getItemMeta();
+        meta.setDisplayName("§f§lDígito " + (digitPos + 1) + ": §6§l" + value);
+        meta.setLore(Arrays.asList("§7Izquierdo: §a+1", "§7Derecho: §c-1"));
+        String tex = textureFor(value);
+        if (tex != null && !tex.isEmpty()) applyTexture(meta, tex);
+        head.setItemMeta(meta);
+        return head;
+    }
+
+    private String textureFor(int digit) {
+        try {
+            List<String> list = plugin.getConfig().getStringList("digit-heads");
+            if (digit >= 0 && digit < list.size()) return list.get(digit).trim();
+        } catch (Exception ignored) {}
+        return null;
+    }
+
+    /** Aplica textura Base64 a la cabeza vía GameProfile (sin dependencias). */
+    private void applyTexture(SkullMeta meta, String base64) {
+        try {
+            Class<?> gp = Class.forName("com.mojang.authlib.GameProfile");
+            Class<?> prop = Class.forName("com.mojang.authlib.properties.Property");
+            Object profile = gp.getConstructor(UUID.class, String.class)
+                    .newInstance(UUID.randomUUID(), "digit");
+            Object props = gp.getMethod("getProperties").invoke(profile);
+            Object p = prop.getConstructor(String.class, String.class)
+                    .newInstance("textures", base64);
+            props.getClass().getMethod("put", Object.class, Object.class)
+                    .invoke(props, "textures", p);
+            meta.getClass().getMethod("setProfile", gp).invoke(meta, profile);
+        } catch (Exception ignored) {
+            // Sin textura: queda la cabeza normal con el número en el nombre
+        }
+    }
+
     private void refresh(Inventory inv, int[] d) {
         ItemStack info = new ItemStack(Material.PAPER);
         ItemMeta im = info.getItemMeta();
         im.setDisplayName("§ePon los 6 dígitos de tu app");
-        im.setLore(Arrays.asList("§7Clic izquierdo: §a+1", "§7Clic derecho: §c-1", "§7Confirma con la lana verde"));
+        im.setLore(Arrays.asList("§7Clic izquierdo: §a+1", "§7Clic derecho: §c-1", "§7Confirma con el bloque verde"));
         info.setItemMeta(im);
         inv.setItem(INFO, info);
-        for (int i = 0; i < 6; i++) {
-            ItemStack w = new ItemStack(Material.valueOf(digitColor(d[i])));
-            ItemMeta m = w.getItemMeta();
-            m.setDisplayName("§f§lDígito " + (i + 1) + ": §6§l" + d[i]);
-            w.setItemMeta(m);
-            inv.setItem(SLOTS[i], w);
-        }
-        ItemStack ok = new ItemStack(Material.LIME_WOOL);
+        for (int i = 0; i < 6; i++) inv.setItem(SLOTS[i], headFor(i, d[i]));
+        ItemStack ok = new ItemStack(Material.EMERALD_BLOCK);
         ItemMeta om = ok.getItemMeta();
         om.setDisplayName("§a§lCONFIRMAR");
         ok.setItemMeta(om);
         inv.setItem(CONFIRM, ok);
-    }
-
-    private String digitColor(int d) {
-        String[] mats = {"WHITE_WOOL", "ORANGE_WOOL", "MAGENTA_WOOL", "LIGHT_BLUE_WOOL",
-                "YELLOW_WOOL", "LIME_WOOL", "PINK_WOOL", "GRAY_WOOL", "CYAN_WOOL", "PURPLE_WOOL"};
-        return mats[d % 10];
     }
 
     @EventHandler

@@ -4,7 +4,7 @@ main: com.discohikorybrs.authstaff.AuthStaff
 api-version: '1.20'
 author: Discohikorybrs
 description: 2FA para staffs no premium con QR en mapa y menu de 6 digitos.
-softdepend: [AuthMe]
+softdepend: [AuthMe, DiscoLogin]
 commands:
   auth:
     description: Verificar tu codigo 2FA o abrir el menu.

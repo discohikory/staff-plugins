@@ -127,6 +127,15 @@ public class DiscoLogin extends JavaPlugin implements CommandExecutor {
         auth.touch(p.getName(), ipOf(p));
         new LoginListener(this).unfreeze(p);
         p.sendMessage(hello);
+        // Avisar a AuthStaff (si está) para que inicie el 2FA tras el logeo
+        Bukkit.getPluginManager().callEvent(new DiscoLoginSuccessEvent(p));
+        try {
+            org.bukkit.plugin.Plugin as = Bukkit.getPluginManager().getPlugin("AuthStaff");
+            if (as != null) {
+                java.lang.reflect.Method m = as.getClass().getMethod("startFlow", Player.class);
+                m.invoke(as, p);
+            }
+        } catch (Exception ignored) {}
     }
 
     @Override
@@ -146,10 +155,22 @@ public class DiscoLogin extends JavaPlugin implements CommandExecutor {
                 s.sendMessage("§eUso: /premium <jugador>");
                 return true;
             }
-            AuthManager.Account acc = auth.get(a[0]);
-            auth.save(a[0], acc == null ? "" : acc.hash, acc == null ? "" : acc.salt,
-                    acc == null ? "" : acc.ip, true);
-            s.sendMessage(msg("premium-set").replace("{jugador}", a[0]));
+            // Solo staff con MC comprado (premium real verificado)
+            s.sendMessage("§eVerificando premium de " + a[0] + "...");
+            final String target = a[0];
+            Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+                boolean ok = AuthManager.isPremium(target);
+                Bukkit.getScheduler().runTask(this, () -> {
+                    if (!ok) {
+                        s.sendMessage("§c" + target + " no es premium (sin MC comprado).");
+                        return;
+                    }
+                    AuthManager.Account acc = auth.get(target);
+                    auth.save(target, acc == null ? "" : acc.hash, acc == null ? "" : acc.salt,
+                            acc == null ? "" : acc.ip, true);
+                    s.sendMessage(msg("premium-set").replace("{jugador}", target));
+                });
+            });
             return true;
         }
         if (!(s instanceof Player)) {

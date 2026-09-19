@@ -10,7 +10,7 @@ mvn package
 → `target/disco-login-1.0.0.jar` a `plugins/` + reinicia.
 
 ## Orden con AuthStaff
-Primero `/login`, luego el 2FA (`/auth`). AuthStaff arranca su flujo solo a los 2s.
+Primero `/login`, luego el 2FA (`/auth`) arranca solo. `/premium` solo acepta staff con **MC comprado** (verificado con Mojang).
 
 ## © Derechos de autor
 © 2026 **Discohikorybrs - Daniel Esteban Vera Fernandez**. Todos los derechos reservados.

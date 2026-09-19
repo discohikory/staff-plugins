@@ -16,6 +16,26 @@ teleport-on-success: true
 freeze-until-verified: true
 # Slot del inventario donde se entrega el mapa QR (0-35)
 qr-slot: 4
+# Muestra la clave manual para escribirla en la app (Google/Microsoft)
+show-manual-key: true
+# Re-entrega el mapa si lo mueven o lo pierden (segundos, 0 = off)
+map-regive-seconds: 3
+# Bloquea mover/soltar el mapa QR hasta verificar
+lock-map-slot: true
+# Texturas Base64 de cabezas 0-9 para el menú (orden 0..9).
+# Sácalas de minecraft-heads.com (cabezas de números) pegando el valor "textures".
+# Vacío ("") = cabeza normal con el número en el nombre.
+digit-heads:
+  - ""
+  - ""
+  - ""
+  - ""
+  - ""
+  - ""
+  - ""
+  - ""
+  - ""
+  - ""
 # Segundos de validez extra del código (±1 paso de 30s siempre permitido)
 # Nombre del emisor que verá la app (Google/Microsoft Authenticator)
 issuer: "SylenMC-Staff"
@@ -24,6 +44,7 @@ messages:
   prefix: "§6[AuthStaff] §r"
   need-verify: "§eEscanea el QR de tu inventario con tu app de autenticación."
   enter-code: "§eEscribe los 6 dígitos en el chat o usa §6/auth menu§e."
+  manual-key: "§7O ingrésala manual en tu app: §e§l{key}"
   wrong-code: "§cCódigo incorrecto, intenta de nuevo."
   success: "§a¡Verificado! Bienvenido al lobby."
   already: "§aYa estás verificado en esta sesión."
