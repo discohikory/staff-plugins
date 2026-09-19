@@ -94,11 +94,14 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
         Rank newR = ladder.get(idx);
         OfflinePlayer t = Bukkit.getOfflinePlayer(mc);
         UserManager um = luckPerms.getUserManager();
-        um.loadUser(t.getUniqueId()).thenAcceptAsync(u -> {
-            for (Rank r : ladder) u.data().remove(Node.builder("group." + r.group).build());
-            u.data().add(Node.builder("group." + newR.group).build());
-            um.saveUser(u);
-        });
+                um.loadUser(t.getUniqueId()).thenAcceptAsync(u -> {
+                    for (Rank r : ladder) u.data().remove(Node.builder("group." + r.group).build());
+                    u.data().add(Node.builder("group." + newR.group).build());
+                    try {
+                        u.setPrimaryGroup(newR.group);
+                    } catch (Exception ignored) {}
+                    um.saveUser(u);
+                });
         syncDiscord(dcId, mc, null, newR);
         String out = msg(up ? "promoted" : "demoted")
                 .replace("{jugador}", mc).replace("{rango}", newR.display);

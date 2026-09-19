@@ -21,6 +21,8 @@ public class DiscoLogin extends JavaPlugin implements CommandExecutor {
     private AuthManager auth;
     private final Set<UUID> logged = ConcurrentHashMap.newKeySet();
     private final Map<UUID, Integer> tasks = new ConcurrentHashMap<>();
+    private final Map<UUID, Integer> barTasks = new ConcurrentHashMap<>();
+    private final Map<UUID, org.bukkit.boss.BossBar> bars = new ConcurrentHashMap<>();
 
     @Override
     public void onEnable() {
@@ -117,6 +119,25 @@ public class DiscoLogin extends JavaPlugin implements CommandExecutor {
         }
         int timeout = getConfig().getInt("login-timeout", 120);
         if (timeout > 0) {
+            p.sendTitle("§e§lBienvenido de nuevo!",
+                    a == null ? "§7Usa §6/register <clave> <clave>" : "§7Usa §6/login <clave>",
+                    10, 60, 10);
+            org.bukkit.boss.BossBar bar = Bukkit.createBossBar("§cPor favor autentícate",
+                    org.bukkit.boss.BarColor.RED, org.bukkit.boss.BarStyle.SOLID);
+            bar.addPlayer(p);
+            bars.put(p.getUniqueId(), bar);
+            final int total = timeout;
+            final int[] left = {timeout};
+            int barTask = Bukkit.getScheduler().runTaskTimer(this, () -> {
+                if (!p.isOnline() || isLogged(p)) {
+                    removeBar(p);
+                    return;
+                }
+                left[0]--;
+                bar.setTitle("§cPor favor autentícate — §e" + left[0] + "s");
+                bar.setProgress(Math.max(0, left[0] / (double) total));
+            }, 20L, 20L).getTaskId();
+            barTasks.put(p.getUniqueId(), barTask);
             int id = Bukkit.getScheduler().runTaskLater(this, () -> {
                 if (p.isOnline() && !isLogged(p)) p.kickPlayer(msg("timeout"));
             }, timeout * 20L).getTaskId();
@@ -124,9 +145,17 @@ public class DiscoLogin extends JavaPlugin implements CommandExecutor {
         }
     }
 
+    private void removeBar(Player p) {
+        org.bukkit.boss.BossBar b = bars.remove(p.getUniqueId());
+        if (b != null) b.removeAll();
+        Integer t = barTasks.remove(p.getUniqueId());
+        if (t != null) Bukkit.getScheduler().cancelTask(t);
+    }
+
     void handleQuit(Player p) {
         logged.remove(p.getUniqueId());
         cancelTask(p);
+        removeBar(p);
     }
 
     private void cancelTask(Player p) {
@@ -136,7 +165,9 @@ public class DiscoLogin extends JavaPlugin implements CommandExecutor {
 
     private void forceLogin(Player p, String hello) {
         logged.add(p.getUniqueId());
+        getLogger().info("Login OK para " + p.getName());
         cancelTask(p);
+        removeBar(p);
         auth.touch(p.getName(), ipOf(p));
         new LoginListener(this).unfreeze(p);
         p.sendMessage(hello);

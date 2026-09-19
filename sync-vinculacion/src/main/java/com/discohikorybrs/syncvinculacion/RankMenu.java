@@ -54,6 +54,19 @@ public class RankMenu implements Listener {
         draw(executor, p, current);
     }
 
+    /** Cabeza personalizada con el nombre del rango. */
+    private ItemStack rankHead(SyncVinculacion.Rank r, int idx, int total, boolean current) {
+        ItemStack head = new ItemStack(Material.PLAYER_HEAD);
+        org.bukkit.inventory.meta.SkullMeta m =
+                (org.bukkit.inventory.meta.SkullMeta) head.getItemMeta();
+        String mark = current ? " §e● actual" : "";
+        m.setDisplayName("§f§l" + r.display + mark);
+        m.setLore(Arrays.asList("§7Nivel " + (idx + 1) + "/" + total,
+                current ? "§cYa tiene este rango" : "§aClic para asignar"));
+        head.setItemMeta(m);
+        return head;
+    }
+
     private void draw(Player executor, Pending pen, int current) {
         java.util.List<SyncVinculacion.Rank> ladder = plugin.ladderView();
         int pages = (int) Math.ceil(ladder.size() / (double) PER_PAGE);
@@ -66,20 +79,13 @@ public class RankMenu implements Listener {
         gm.setDisplayName(" ");
         glass.setItemMeta(gm);
         for (int s = 0; s < 27; s++) inv.setItem(s, glass);
-        // Rangos de la página
+        // Rangos de la página (cabezas personalizadas)
         int start = pen.page * PER_PAGE;
         for (int i = 0; i < PER_PAGE; i++) {
             int idx = start + i;
             if (idx >= ladder.size()) break;
             SyncVinculacion.Rank r = ladder.get(idx);
-            ItemStack w = new ItemStack(WOOLS[idx % WOOLS.length]);
-            ItemMeta m = w.getItemMeta();
-            String mark = (idx == current) ? " §e● actual" : "";
-            m.setDisplayName("§f§l" + r.display + mark);
-            m.setLore(Arrays.asList("§7Nivel " + (idx + 1) + "/" + ladder.size(),
-                    idx == current ? "§cYa tiene este rango" : "§aClic para asignar"));
-            w.setItemMeta(m);
-            inv.setItem(SLOTS[i], w);
+            inv.setItem(SLOTS[i], rankHead(r, idx, ladder.size(), idx == current));
         }
         // Anterior
         if (pen.page > 0) {
