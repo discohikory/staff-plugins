@@ -1,0 +1,36 @@
+# ⚙️ DiscoLogin — configuración
+# © 2026 Discohikorybrs - Daniel Esteban Vera Fernandez
+
+# Segundos para logearse antes del kick (0 = sin limite)
+login-timeout: 120
+# Mínimo de caracteres de la clave
+min-password-length: 5
+# Cuentas máximas por IP
+max-accounts-per-ip: 3
+# Días que dura la sesión recordada por IP (0 = desactivado)
+session-days: 7
+# Premium entra sin clave (verifica con Mojang). Bedrock (.) nunca es premium.
+premium-auto-login: true
+# Congelar movimiento y vista hasta logearse
+freeze: true
+# Efecto ceguera hasta logearse
+blindness: true
+
+messages:
+  prefix: "§6[Login] §r"
+  need-register: "§eRegístrate: §6/register <clave> <clave>"
+  need-login: "§eLogéate: §6/login <clave>"
+  registered: "§a¡Registrado! Ya puedes jugar."
+  logged: "§a¡Sesión iniciada! Bienvenido."
+  wrong: "§cClave incorrecta."
+  mismatch: "§cLas claves no coinciden."
+  short: "§cMínimo {n} caracteres."
+  already: "§cYa tienes cuenta. Usa /login."
+  no-account: "§cSin cuenta. Usa /register."
+  changed: "§aClave cambiada."
+  timeout: "§cTardaste mucho en logearte."
+  session: "§aSesión recordada, ¡hola de nuevo!"
+  premium-welcome: "§aCuenta premium verificada: entras directo."
+  max-ip: "§cDemasiadas cuentas desde tu IP."
+  unregistered: "§aRegistro borrado para {jugador}."
+  premium-set: "§a{jugador} marcado como premium."

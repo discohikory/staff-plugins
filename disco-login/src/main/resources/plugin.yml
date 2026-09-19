@@ -1,0 +1,28 @@
+name: DiscoLogin
+version: 1.0.0
+main: com.discohikorybrs.discologin.DiscoLogin
+api-version: '1.20'
+author: Discohikorybrs
+description: Registro y login estilo nLogin para premium y no premium, con sesiones.
+commands:
+  register:
+    description: Crea tu contrasena.
+    usage: /register <clave> <clave>
+  login:
+    description: Inicia sesion.
+    usage: /login <clave>
+  changepassword:
+    description: Cambia tu contrasena.
+    usage: /changepassword <vieja> <nueva>
+    aliases: [changepass]
+  unregister:
+    description: Borra el registro de un jugador.
+    usage: /unregister <jugador>
+    permission: discologin.admin
+  premium:
+    description: Marca cuenta como premium (auto-login).
+    usage: /premium <jugador>
+    permission: discologin.admin
+permissions:
+  discologin.admin:
+    default: op
