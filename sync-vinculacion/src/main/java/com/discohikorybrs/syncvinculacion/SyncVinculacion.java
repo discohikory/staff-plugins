@@ -78,6 +78,8 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
         getCommand("demote").setExecutor(this);
         menu = new RankMenu(this);
         getServer().getPluginManager().registerEvents(menu, this);
+        // Cada 5 min: si un vinculado ya no tiene rango staff, se desvincula solo
+        Bukkit.getScheduler().runTaskTimerAsynchronously(this, this::autoUnlinkCheck, 6000L, 6000L);
         getLogger().info("SyncVinculacion v1.0.0 por Discohikorybrs activado.");
     }
 
@@ -128,6 +130,15 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
                 getLogger().warning("No se pudo avisar en sync: " + e.getMessage());
             }
         });
+    }
+
+    /** Busca la clave (uuid) vinculada a un nick de MC. */
+    private String keyOfMc(String mcName) {
+        for (String key : links.getKeys(false)) {
+            String mc = links.getString(key + ".mc");
+            if (mc != null && mc.equalsIgnoreCase(mcName)) return key;
+        }
+        return null;
     }
 
     /** Busca el Discord ID vinculado a un nick de MC (ignora mayúsculas). */
@@ -291,14 +302,51 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
     public boolean onCommand(CommandSender s, Command cmd, String label, String[] a) {
         String name = cmd.getName().toLowerCase();
         if (name.equals("stafflinkdiscord")) {
+            // /stafflinkdiscord remove <mc> — solo superiores (sync.admin)
+            if (a.length >= 1 && a[0].equalsIgnoreCase("remove")) {
+                if (!s.hasPermission("sync.admin")) {
+                    s.sendMessage("§cSolo superiores al Mánager.");
+                    return true;
+                }
+                if (a.length < 2) {
+                    s.sendMessage("§eUso: /stafflinkdiscord remove <nick-mc>");
+                    return true;
+                }
+                String key = keyOfMc(a[1]);
+                if (key == null) {
+                    s.sendMessage(msg("not-linked").replace("{jugador}", a[1]));
+                    return true;
+                }
+                unlink(key, "desvinculado por un superior");
+                s.sendMessage(msg("unlinked").replace("{jugador}", a[1]));
+                return true;
+            }
             if (!(s instanceof Player)) {
-                s.sendMessage("Solo jugadores.");
+                s.sendMessage("Solo jugadores (o usa: /stafflinkdiscord remove <nick>).");
                 return true;
             }
             Player p = (Player) s;
             if (a.length < 1 || !a[0].matches("\\d{17,20}")) {
                 p.sendMessage(msg("usage-link"));
                 if (a.length >= 1) p.sendMessage(msg("bad-id"));
+                return true;
+            }
+            String prev = links.getString(p.getUniqueId() + ".discord");
+            if (prev != null && prev.equals(a[0])) {
+                // Ya vinculado: aviso por MD
+                p.sendMessage(msg("already-linked"));
+                if (jda != null) {
+                    final String id = a[0];
+                    Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+                        try {
+                            jda.retrieveUserById(id).queue(u ->
+                                    u.openPrivateChannel().queue(ch ->
+                                            ch.sendMessage("ℹ️ Tu cuenta **" + p.getName()
+                                                    + "** ya está vinculada. Si no fuiste tú, avisa a un superior.")
+                                                    .queue(null, e -> {}), e -> {}));
+                        } catch (Exception ignored) {}
+                    });
+                }
                 return true;
             }
             links.set(p.getUniqueId() + ".discord", a[0]);
@@ -336,6 +384,101 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
             return true;
         }
         return false;
+    }
+
+    /** Desvincula: borra registro, quita roles staff en Discord y avisa. */
+    public void unlink(String mcKey, String reason) {
+        String dcId = links.getString(mcKey + ".discord");
+        String mc = links.getString(mcKey + ".mc", mcKey);
+        links.set(mcKey, null);
+        saveLinks();
+        if (dcId == null) return;
+        String guildId = getConfig().getString("discord.guild-id", "");
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            try {
+                Guild g = jda == null ? null : jda.getGuildById(guildId);
+                if (g == null) return;
+                Member m;
+                try {
+                    m = g.retrieveMemberById(dcId).complete();
+                } catch (Exception e) {
+                    return;
+                }
+                if (m == null) return;
+                for (Rank r : ladder) {
+                    if (r.roleId == null || r.roleId.isEmpty() || r.roleId.equals("null")) continue;
+                    Role ro = g.getRoleById(r.roleId);
+                    if (ro != null) {
+                        try {
+                            g.removeRoleFromMember(m, ro).complete();
+                        } catch (Exception ignored) {}
+                    }
+                }
+                try {
+                    m.modifyNickname(mc).queue(null, e -> {});
+                } catch (Exception ignored) {}
+                m.getUser().openPrivateChannel().queue(
+                        ch -> ch.sendMessage("🔓 Tu cuenta **" + mc + "** fue desvinculada ("
+                                + reason + ").").queue(null, e -> {}), e -> {});
+                logUnlink(mc, reason);
+            } catch (Exception e) {
+                getLogger().warning("Desvincular: " + e.getMessage());
+            }
+        });
+    }
+
+    private void logUnlink(String mc, String reason) {
+        if (jda == null) return;
+        String guildId = getConfig().getString("discord.guild-id", "");
+        String chId = getConfig().getString("discord.sync-channel-id", "");
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            try {
+                Guild g = jda.getGuildById(guildId);
+                if (g == null) return;
+                TextChannel ch = g.getTextChannelById(chId);
+                if (ch == null) return;
+                ch.sendMessageEmbeds(new net.dv8tion.jda.api.EmbedBuilder()
+                        .setTitle("🔓 Cuenta desvinculada: " + mc)
+                        .setDescription("Motivo: **" + reason + "**")
+                        .setColor(0xff2d55).build()).queue();
+            } catch (Exception e) {
+                getLogger().warning("Aviso desvinculación: " + e.getMessage());
+            }
+        });
+    }
+
+    /** Revisa vinculados sin rango staff y los desvincula. */
+    private void autoUnlinkCheck() {
+        try {
+            for (String key : new java.util.HashSet<>(links.getKeys(false))) {
+                String dcId = links.getString(key + ".discord");
+                String mc = links.getString(key + ".mc", key);
+                if (dcId == null) continue;
+                OfflinePlayer t = Bukkit.getOfflinePlayer(mc);
+                if (!t.hasPlayedBefore() && !t.isOnline()) continue;
+                final String fMc = mc;
+                luckPerms.getUserManager().loadUser(t.getUniqueId()).thenAccept(u -> {
+                    boolean staff = false;
+                    for (net.luckperms.api.node.Node n : u.getNodes()) {
+                        if (!n.getKey().startsWith("group.")) continue;
+                        String gname = n.getKey().substring(6);
+                        for (Rank r : ladder) {
+                            if (r.group.equalsIgnoreCase(gname)) {
+                                staff = true;
+                                break;
+                            }
+                        }
+                        if (staff) break;
+                    }
+                    if (!staff) {
+                        Bukkit.getScheduler().runTask(this, () ->
+                                unlink(key, "sin rango staff"));
+                    }
+                });
+            }
+        } catch (Exception e) {
+            getLogger().warning("Auto-desvincular: " + e.getMessage());
+        }
     }
 
     /** ID de Discord vinculado a un UUID de MC (para otros plugins). */
