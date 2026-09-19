@@ -9,6 +9,9 @@ mvn package
 ```
 → `target/disco-login-1.0.0.jar` a `plugins/` + reinicia.
 
+## Flujo de primer ingreso
+Pregunta clicable: **¿Tienes MC comprado?** → premium se verifica y entra directo, no premium va a `/register`. El login vale en todos los servidores (canal `discologin:main`, instala el plugin en cada uno).
+
 ## Orden con AuthStaff
 Primero `/login`, luego el 2FA (`/auth`) arranca solo. `/premium` solo acepta staff con **MC comprado** (verificado con Mojang).
 

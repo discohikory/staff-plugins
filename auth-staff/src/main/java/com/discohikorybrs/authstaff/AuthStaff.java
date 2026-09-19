@@ -245,9 +245,10 @@ public class AuthStaff extends JavaPlugin implements Listener, CommandExecutor {
             }
             int slot = getConfig().getInt("qr-slot", 4);
             if (!isOurMap(p.getInventory().getItem(slot))) {
-                String uri = TotpUtil.otpAuthUri(sec, p.getName(),
+        String uri = TotpUtil.otpAuthUri(sec, p.getName(),
                         getConfig().getString("issuer", "Staff"));
-                QrMapUtil.giveQrMap(this, p, uri);
+        QrMapUtil.giveQrMap(this, p, uri);
+        getLogger().info("2FA iniciado para " + p.getName());
             }
         }, secs * 20L, secs * 20L).getTaskId();
         regiveTasks.put(p.getUniqueId(), id);
@@ -267,6 +268,7 @@ public class AuthStaff extends JavaPlugin implements Listener, CommandExecutor {
         }
         if (TotpUtil.verify(secret, code)) {
             verified.put(p.getUniqueId(), true);
+            getLogger().info("2FA verificado para " + p.getName());
             menu.clear(p.getUniqueId());
             Integer t = regiveTasks.remove(p.getUniqueId());
             if (t != null) Bukkit.getScheduler().cancelTask(t);

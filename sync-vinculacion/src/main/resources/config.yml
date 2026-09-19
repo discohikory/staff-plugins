@@ -6,6 +6,8 @@ discord:
   token: "PEGA_AQUI_EL_TOKEN"
   # ID del servidor (guild)
   guild-id: "000000000000000000"
+  # Canal donde sale el selector de rangos (sincronizacion-discord)
+  sync-channel-id: "1550726113662210159"
   # Formato del nick en Discord: {rango} y {mc} disponibles
   nickname-format: "{rango} {mc}"
 
@@ -30,6 +32,7 @@ messages:
   bad-id: "§cEse ID no es válido (17-20 dígitos)."
   linked: "§a¡Cuenta vinculada con Discord! Revisa tus MD."
   need-link: "§cPrimero vincúlate con /stafflinkdiscord <tu-id>."
+  need-link-many: "§c{jugador} no está vinculado. Que use /stafflinkdiscord <su-id>."
   promoted: "§a{jugador} subió a {rango} (MC + Discord)."
   demoted: "§c{jugador} bajó a {rango} (MC + Discord)."
   top-rank: "§cYa está en el rango máximo."

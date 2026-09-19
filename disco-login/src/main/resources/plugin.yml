@@ -20,6 +20,9 @@ commands:
     description: Borra el registro de un jugador.
     usage: /unregister <jugador>
     permission: discologin.admin
+  soy:
+    description: Declara si tienes MC comprado o no (primer ingreso).
+    usage: /soy <premium|nopremium>
   premium:
     description: Marca cuenta como premium (auto-login).
     usage: /premium <jugador>

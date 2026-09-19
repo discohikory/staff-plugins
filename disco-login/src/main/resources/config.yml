@@ -20,6 +20,7 @@ messages:
   prefix: "§6[Login] §r"
   need-register: "§eRegístrate: §6/register <clave> <clave>"
   need-login: "§eLogéate: §6/login <clave>"
+  first-join: "§e¿Tienes Minecraft comprado?"
   registered: "§a¡Registrado! Ya puedes jugar."
   logged: "§a¡Sesión iniciada! Bienvenido."
   wrong: "§cClave incorrecta."

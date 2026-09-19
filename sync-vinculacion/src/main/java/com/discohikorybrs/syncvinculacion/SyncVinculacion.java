@@ -2,10 +2,17 @@ package com.discohikorybrs.syncvinculacion;
 
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
+import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.User;
+import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
+import net.dv8tion.jda.api.events.interaction.component.StringSelectInteractionEvent;
+import net.dv8tion.jda.api.hooks.ListenerAdapter;
+import net.dv8tion.jda.api.interactions.components.ActionRow;
+import net.dv8tion.jda.api.interactions.components.selections.SelectOption;
+import net.dv8tion.jda.api.interactions.components.selections.StringSelectMenu;
 import net.dv8tion.jda.api.requests.GatewayIntent;
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.LuckPermsProvider;
@@ -66,6 +73,7 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
                 jda = JDABuilder.createDefault(token,
                                 GatewayIntent.GUILD_MEMBERS, GatewayIntent.GUILD_MESSAGES,
                                 GatewayIntent.DIRECT_MESSAGES)
+                        .addEventListeners(new RankListener())
                         .build().awaitReady();
                 getLogger().info("Discord conectado como " + jda.getSelfUser().getAsTag());
             } catch (Exception e) {
@@ -76,6 +84,16 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
         getCommand("promote").setExecutor(this);
         getCommand("demote").setExecutor(this);
         getLogger().info("SyncVinculacion v1.0.0 por Discohikorybrs activado.");
+    }
+
+    /** Busca el Discord ID vinculado a un nick de MC (ignora mayúsculas). */
+    private String discordOf(String mcName) {
+        for (String key : links.getKeys(false)) {
+            String mc = links.getString(key + ".mc");
+            if (mc != null && mc.equalsIgnoreCase(mcName))
+                return links.getString(key + ".discord");
+        }
+        return null;
     }
 
     @Override
@@ -200,45 +218,113 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
                 s.sendMessage("§eUso: /" + name + " <jugador>");
                 return true;
             }
-            OfflinePlayer t = Bukkit.getOfflinePlayer(a[0]);
-            if (t == null || (!t.hasPlayedBefore() && !t.isOnline())) {
-                s.sendMessage("§cJugador no encontrado.");
+            boolean up = name.equals("promote");
+            String mc = a[0];
+            String dcId = discordOf(mc);
+            if (dcId == null) {
+                s.sendMessage(msg("need-link-many").replace("{jugador}", mc));
                 return true;
             }
-            boolean up = name.equals("promote");
-            luckPerms.getUserManager().loadUser(t.getUniqueId()).thenAcceptAsync(u -> {
-                int cur = currentRank(u);
-                if (cur < 0) {
-                    s.sendMessage(msg("no-rank"));
-                    return;
-                }
-                int next = up ? cur + 1 : cur - 1;
-                if (next >= ladder.size()) {
-                    s.sendMessage(msg("top-rank"));
-                    return;
-                }
-                if (next < 0) {
-                    s.sendMessage(msg("bottom-rank"));
-                    return;
-                }
-                Rank oldR = ladder.get(cur);
-                Rank newR = ladder.get(next);
-                Bukkit.getScheduler().runTask(this, () -> {
-                    applyGroup(t, newR.group, oldR.group);
-                    String out = msg(up ? "promoted" : "demoted")
-                            .replace("{jugador}", t.getName()).replace("{rango}", newR.display);
-                    s.sendMessage(out);
-                    String dcId = links.getString(t.getUniqueId() + ".discord");
-                    if (dcId == null) {
-                        if (t.isOnline()) ((Player) t).sendMessage(msg("need-link"));
-                    } else {
-                        syncDiscord(dcId, t.getName(), oldR, newR);
-                    }
-                });
-            });
+            postRankPicker(s, mc, dcId, up);
             return true;
         }
         return false;
+    }
+
+    /** Publica el selector de rangos en #sincronizacion-discord. */
+    private void postRankPicker(CommandSender s, String mc, String dcId, boolean up) {
+        if (jda == null) {
+            s.sendMessage("§cBot de Discord no conectado. Revisa el token.");
+            return;
+        }
+        String execDc = (s instanceof Player) ? discordOf(s.getName()) : null;
+        String guildId = getConfig().getString("discord.guild-id", "");
+        String chId = getConfig().getString("discord.sync-channel-id", "");
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            try {
+                Guild g = jda.getGuildById(guildId);
+                if (g == null) {
+                    sendSync(s, "§cServidor de Discord no encontrado en config.");
+                    return;
+                }
+                TextChannel ch = g.getTextChannelById(chId);
+                if (ch == null) {
+                    sendSync(s, "§cCanal de sincronización no configurado.");
+                    return;
+                }
+                net.dv8tion.jda.api.EmbedBuilder eb =
+                        new net.dv8tion.jda.api.EmbedBuilder()
+                        .setTitle((up ? "📈 Promotear a " : "📉 Demotear a ") + mc)
+                        .setDescription("Solicitado por **"
+                                + (s instanceof Player ? s.getName() : "consola")
+                                + "**. Elige el rango destino:")
+                        .setColor(up ? 0x2effa1 : 0xff2d55);
+                StringSelectMenu.Builder menu = StringSelectMenu
+                        .create("rankpick:" + (up ? "up" : "down") + ":" + mc + ":" + (execDc == null ? "-" : execDc))
+                        .setPlaceholder("Selecciona el rango...")
+                        .setRequiredRange(1, 1);
+                for (int i = 0; i < ladder.size(); i++) {
+                    Rank r = ladder.get(i);
+                    menu.addOptions(SelectOption.of(r.display, String.valueOf(i))
+                            .withDescription("Nivel " + (i + 1)));
+                }
+                ch.sendMessageEmbeds(eb.build())
+                        .setComponents(ActionRow.of(menu.build())).queue(
+                                ok -> sendSync(s, "§aSelector publicado en #sincronizacion-discord."),
+                                err -> sendSync(s, "§cNo pude publicar: " + err.getMessage()));
+            } catch (Exception e) {
+                sendSync(s, "§cError: " + e.getMessage());
+            }
+        });
+    }
+
+    private void sendSync(CommandSender s, String m) {
+        Bukkit.getScheduler().runTask(this, () -> s.sendMessage(m));
+    }
+
+    /** Aplica el rango elegido desde el selector de Discord. */
+    private class RankListener extends ListenerAdapter {
+        @Override
+        public void onStringSelectInteraction(StringSelectInteractionEvent e) {
+            if (!e.getComponentId().startsWith("rankpick:")) return;
+            String[] p = e.getComponentId().split(":", 4);
+            if (p.length < 4) return;
+            boolean up = p[1].equals("up");
+            String mc = p[2];
+            String execDc = p[3];
+            Member clicker = e.getMember();
+            boolean allowed = clicker != null && (clicker.getId().equals(execDc)
+                    || clicker.hasPermission(Permission.ADMINISTRATOR));
+            if (!allowed) {
+                e.reply("⛔ Solo quien pidió el cambio o un administrador.").setEphemeral(true).queue();
+                return;
+            }
+            int idx;
+            try {
+                idx = Integer.parseInt(e.getValues().get(0));
+            } catch (Exception ex) {
+                return;
+            }
+            if (idx < 0 || idx >= ladder.size()) return;
+            Rank newR = ladder.get(idx);
+            Bukkit.getScheduler().runTask(SyncVinculacion.this, () -> {
+                OfflinePlayer t = Bukkit.getOfflinePlayer(mc);
+                // Quita todos los grupos de la escalera y pone el elegido
+                UserManager um = luckPerms.getUserManager();
+                um.loadUser(t.getUniqueId()).thenAcceptAsync(u -> {
+                    for (Rank r : ladder) u.data().remove(Node.builder("group." + r.group).build());
+                    u.data().add(Node.builder("group." + newR.group).build());
+                    um.saveUser(u);
+                });
+                String dcId = discordOf(mc);
+                syncDiscord(dcId, mc, null, newR);
+                e.editMessageEmbeds(new net.dv8tion.jda.api.EmbedBuilder()
+                        .setTitle((up ? "📈 Promoteado: " : "📉 Demoteado: ") + mc)
+                        .setDescription("Nuevo rango: **" + newR.display + "**\nElegido por " + clicker.getAsMention())
+                        .setColor(up ? 0x2effa1 : 0xff2d55).build())
+                        .setComponents().queue();
+            });
+        }
     }
 
     /** ID de Discord vinculado a un UUID de MC (para otros plugins). */

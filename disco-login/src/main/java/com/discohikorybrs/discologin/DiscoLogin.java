@@ -34,8 +34,26 @@ public class DiscoLogin extends JavaPlugin implements CommandExecutor {
             return;
         }
         getServer().getPluginManager().registerEvents(new LoginListener(this), this);
-        for (String c : new String[]{"register", "login", "changepassword", "unregister", "premium"})
+        for (String c : new String[]{"register", "login", "changepassword", "unregister", "premium", "soy"})
             getCommand(c).setExecutor(this);
+        // Canal entre servidores: login en uno = logeado en todos
+        getServer().getMessenger().registerOutgoingPluginChannel(this, "discologin:main");
+        getServer().getMessenger().registerIncomingPluginChannel(this, "discologin:main",
+                (channel, player, bytes) -> {
+                    try {
+                        java.io.DataInputStream in = new java.io.DataInputStream(
+                                new java.io.ByteArrayInputStream(bytes));
+                        String tag = in.readUTF();
+                        String name = in.readUTF();
+                        if (!tag.equals("login")) return;
+                        Player t = Bukkit.getPlayerExact(name);
+                        if (t != null && t.isOnline() && !isLogged(t)) {
+                            Bukkit.getScheduler().runTask(this, () -> {
+                                if (t.isOnline() && !isLogged(t)) forceLogin(t, msg("logged"));
+                            });
+                        }
+                    } catch (Exception ignored) {}
+                });
         getLogger().info("DiscoLogin v1.0.0 por Discohikorybrs activado.");
     }
 
@@ -90,9 +108,10 @@ public class DiscoLogin extends JavaPlugin implements CommandExecutor {
 
     private void prompt(Player p, AuthManager.Account a, String ip) {
         if (!p.isOnline()) return;
-        // Sin sesión recordada: siempre pedir clave al entrar
+        // Sin sesión recordada: siempre pide clave al entrar
         if (a == null) {
-            p.sendMessage(msg("need-register"));
+            askFirstJoin(p);
+            return;
         } else {
             p.sendMessage(msg("need-login"));
         }
@@ -130,11 +149,67 @@ public class DiscoLogin extends JavaPlugin implements CommandExecutor {
                 m.invoke(as, p);
             }
         } catch (Exception ignored) {}
+        // Avisar a los otros servidores (solo Velocity/Bungee reenvía esto)
+        try {
+            java.io.ByteArrayOutputStream b = new java.io.ByteArrayOutputStream();
+            java.io.DataOutputStream out = new java.io.DataOutputStream(b);
+            out.writeUTF("login");
+            out.writeUTF(p.getName());
+            p.sendPluginMessage(this, "discologin:main", b.toByteArray());
+        } catch (Exception ignored) {}
+    }
+
+    /** Primera vez: pregunta clicable premium o no premium. */
+    private void askFirstJoin(Player p) {
+        p.sendMessage(msg("first-join"));
+        net.md_5.bungee.api.chat.TextComponent yes =
+                new net.md_5.bungee.api.chat.TextComponent("§a§l[✔ SOY PREMIUM] ");
+        yes.setClickEvent(new net.md_5.bungee.api.chat.ClickEvent(
+                net.md_5.bungee.api.chat.ClickEvent.Action.RUN_COMMAND, "/soy premium"));
+        yes.setHoverEvent(new net.md_5.bungee.api.chat.HoverEvent(
+                net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT,
+                new net.md_5.bungee.api.chat.TextComponent[]{
+                        new net.md_5.bungee.api.chat.TextComponent("§7Tengo MC comprado")}));
+        net.md_5.bungee.api.chat.TextComponent no =
+                new net.md_5.bungee.api.chat.TextComponent("§c§l[✘ NO PREMIUM]");
+        no.setClickEvent(new net.md_5.bungee.api.chat.ClickEvent(
+                net.md_5.bungee.api.chat.ClickEvent.Action.RUN_COMMAND, "/soy nopremium"));
+        no.setHoverEvent(new net.md_5.bungee.api.chat.HoverEvent(
+                net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT,
+                new net.md_5.bungee.api.chat.TextComponent[]{
+                        new net.md_5.bungee.api.chat.TextComponent("§7Juego sin MC comprado")}));
+        p.spigot().sendMessage(yes, no);
     }
 
     @Override
     public boolean onCommand(CommandSender s, Command cmd, String label, String[] a) {
         String n = cmd.getName().toLowerCase();
+        if (n.equals("soy")) {
+            if (!(s instanceof Player)) return true;
+            Player p = (Player) s;
+            if (a.length < 1) {
+                askFirstJoin(p);
+                return true;
+            }
+            if (a[0].equalsIgnoreCase("premium")) {
+                p.sendMessage("§eVerificando tu cuenta premium...");
+                Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+                    boolean ok = AuthManager.isPremium(p.getName());
+                    Bukkit.getScheduler().runTask(this, () -> {
+                        if (!p.isOnline()) return;
+                        if (ok) {
+                            auth.save(p.getName(), "", "", ipOf(p), true);
+                            forceLogin(p, msg("premium-welcome"));
+                        } else {
+                            p.sendMessage("§cNo eres premium. Regístrate: §6/register <clave> <clave>");
+                        }
+                    });
+                });
+                return true;
+            }
+            p.sendMessage(msg("need-register"));
+            return true;
+        }
         if (n.equals("unregister")) {
             if (a.length < 1) {
                 s.sendMessage("§eUso: /unregister <jugador>");
