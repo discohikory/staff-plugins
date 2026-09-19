@@ -90,7 +90,8 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
             Rank r = new Rank();
             r.group = String.valueOf(m.get("group"));
             r.display = String.valueOf(m.get("display"));
-            r.roleId = String.valueOf(m.getOrDefault("discord-role-id", ""));
+            Object ro = m.get("discord-role-id");
+            r.roleId = ro == null ? "" : String.valueOf(ro);
             ladder.add(r);
         }
     }

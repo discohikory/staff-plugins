@@ -10,10 +10,10 @@ import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.MapMeta;
 import org.bukkit.map.MapCanvas;
+import org.bukkit.map.MapPalette;
 import org.bukkit.map.MapRenderer;
 import org.bukkit.map.MapView;
 
-import java.awt.Color;
 import java.util.EnumMap;
 import java.util.Map;
 
@@ -49,9 +49,11 @@ public final class QrMapUtil {
         public void render(MapView map, MapCanvas canvas, Player player) {
             if (done) return;
             done = true;
+            byte black = MapPalette.matchColor(0, 0, 0);
+            byte white = MapPalette.matchColor(255, 255, 255);
             for (int x = 0; x < 128; x++)
                 for (int y = 0; y < 128; y++)
-                    canvas.setPixel(x, y, matrix[x][y] ? Color.BLACK : Color.WHITE);
+                    canvas.setPixel(x, y, matrix[x][y] ? black : white);
         }
     }
 
