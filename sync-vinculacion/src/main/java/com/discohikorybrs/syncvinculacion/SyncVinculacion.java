@@ -90,6 +90,86 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
         return ladder;
     }
 
+    /** Quita un rango: LuckPerms + rol Discord + nick + aviso. */
+    public void applyRemove(CommandSender executor, String mc, String dcId, int idx) {
+        if (idx < 0 || idx >= ladder.size()) return;
+        Rank gone = ladder.get(idx);
+        OfflinePlayer t = Bukkit.getOfflinePlayer(mc);
+        UserManager um = luckPerms.getUserManager();
+        um.loadUser(t.getUniqueId()).thenAcceptAsync(u -> {
+            u.data().remove(Node.builder("group." + gone.group).build());
+            um.saveUser(u);
+        });
+        removeDiscordRole(dcId, mc, gone);
+        String out = msg("removed").replace("{jugador}", mc).replace("{rango}", gone.display);
+        executor.sendMessage(out);
+        logRemove(executor instanceof Player ? executor.getName() : "consola", mc, gone);
+    }
+
+    private void removeDiscordRole(String dcId, String mc, Rank gone) {
+        if (jda == null || dcId == null) return;
+        String guildId = getConfig().getString("discord.guild-id", "");
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            try {
+                Guild g = jda.getGuildById(guildId);
+                if (g == null) return;
+                Member m;
+                try {
+                    m = g.retrieveMemberById(dcId).complete();
+                } catch (Exception e) {
+                    return;
+                }
+                if (m == null) return;
+                if (gone.roleId != null && !gone.roleId.isEmpty() && !gone.roleId.equals("null")) {
+                    Role ro = g.getRoleById(gone.roleId);
+                    if (ro != null) {
+                        try {
+                            g.removeRoleFromMember(m, ro).complete();
+                        } catch (Exception ignored) {}
+                    }
+                }
+                // Si no le quedan roles staff, nick vuelve al nick de MC
+                boolean hasStaff = false;
+                for (Role r : m.getRoles()) {
+                    for (Rank x : ladder) {
+                        if (x.roleId != null && x.roleId.equals(r.getId())) {
+                            hasStaff = true;
+                            break;
+                        }
+                    }
+                    if (hasStaff) break;
+                }
+                if (!hasStaff) {
+                    try {
+                        m.modifyNickname(mc).queue(null, e -> {});
+                    } catch (Exception ignored) {}
+                }
+            } catch (Exception e) {
+                getLogger().warning("Quitar rol Discord: " + e.getMessage());
+            }
+        });
+    }
+
+    private void logRemove(String by, String mc, Rank gone) {
+        if (jda == null) return;
+        String guildId = getConfig().getString("discord.guild-id", "");
+        String chId = chanFor("ranks");
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            try {
+                Guild g = jda.getGuildById(guildId);
+                if (g == null) return;
+                TextChannel ch = g.getTextChannelById(chId);
+                if (ch == null) return;
+                ch.sendMessageEmbeds(new net.dv8tion.jda.api.EmbedBuilder()
+                        .setTitle("📉 Rango retirado: " + mc)
+                        .setDescription("Rango quitado: **" + gone.display + "**\nPor: **" + by + "**")
+                        .setColor(0xff2d55).build()).queue();
+            } catch (Exception e) {
+                getLogger().warning("Aviso quitar rango: " + e.getMessage());
+            }
+        });
+    }
+
     /** Aplica el rango elegido: LuckPerms + Discord + aviso en el canal sync. */
     public void applyRank(CommandSender executor, String mc, String dcId, int idx, boolean up) {
         if (idx < 0 || idx >= ladder.size()) return;
@@ -111,11 +191,19 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
         logPromote(executor instanceof Player ? executor.getName() : "consola", mc, newR, up);
     }
 
+    /** Canal para cada tipo de mensaje (links/ranks/unlinks), con fallback. */
+    private String chanFor(String kind) {
+        String c = getConfig().getString("discord.channels." + kind, "");
+        if (c == null || c.isEmpty())
+            c = getConfig().getString("discord.sync-channel-id", "");
+        return c;
+    }
+
     /** Publica el cambio en #sincronizacion-discord. */
     private void logPromote(String by, String mc, Rank newR, boolean up) {
         if (jda == null) return;
         String guildId = getConfig().getString("discord.guild-id", "");
-        String chId = getConfig().getString("discord.sync-channel-id", "");
+        String chId = chanFor("ranks");
         Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
             try {
                 Guild g = jda.getGuildById(guildId);
@@ -378,8 +466,10 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
             luckPerms.getUserManager().loadUser(Bukkit.getOfflinePlayer(mc).getUniqueId())
                     .thenAcceptAsync(u -> {
                         int c = currentRank(u);
-                        Bukkit.getScheduler().runTask(this, () ->
-                                menu.open(p, mc, dcId, up, c));
+                        Bukkit.getScheduler().runTask(this, () -> {
+                            if (up) menu.open(p, mc, dcId, true, c);
+                            else menu.openRemove(p, mc, dcId, c);
+                        });
                     });
             return true;
         }
@@ -430,7 +520,7 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
     private void logUnlink(String mc, String reason) {
         if (jda == null) return;
         String guildId = getConfig().getString("discord.guild-id", "");
-        String chId = getConfig().getString("discord.sync-channel-id", "");
+        String chId = chanFor("unlinks");
         Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
             try {
                 Guild g = jda.getGuildById(guildId);

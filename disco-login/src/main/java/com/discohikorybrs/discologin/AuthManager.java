@@ -16,7 +16,7 @@ import java.sql.Statement;
 public class AuthManager {
 
     public static class Account {
-        String hash, salt, ip;
+        String hash, salt, ip, platform;
         long lastLogin;
         boolean premium;
     }
@@ -37,7 +37,11 @@ public class AuthManager {
         try (Statement st = db.createStatement()) {
             st.executeUpdate("CREATE TABLE IF NOT EXISTS users ("
                     + "name TEXT PRIMARY KEY, hash TEXT, salt TEXT, ip TEXT, "
-                    + "last_login INTEGER DEFAULT 0, premium INTEGER DEFAULT 0)");
+                    + "last_login INTEGER DEFAULT 0, premium INTEGER DEFAULT 0, "
+                    + "platform TEXT DEFAULT 'java')");
+            try {
+                st.executeUpdate("ALTER TABLE users ADD COLUMN platform TEXT DEFAULT 'java'");
+            } catch (Exception ignored) {}
         }
     }
 
@@ -49,7 +53,7 @@ public class AuthManager {
 
     public synchronized Account get(String name) {
         try (PreparedStatement ps = db.prepareStatement(
-                "SELECT hash,salt,ip,last_login,premium FROM users WHERE name=?")) {
+                "SELECT hash,salt,ip,last_login,premium,platform FROM users WHERE name=?")) {
             ps.setString(1, name.toLowerCase());
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) return null;
@@ -59,6 +63,12 @@ public class AuthManager {
                 a.ip = rs.getString(3);
                 a.lastLogin = rs.getLong(4);
                 a.premium = rs.getInt(5) == 1;
+                try {
+                    a.platform = rs.getString(6);
+                } catch (Exception e) {
+                    a.platform = "java";
+                }
+                if (a.platform == null) a.platform = "java";
                 return a;
             }
         } catch (Exception e) {
@@ -67,14 +77,20 @@ public class AuthManager {
     }
 
     public synchronized void save(String name, String hash, String salt, String ip, boolean premium) {
+        save(name, hash, salt, ip, premium, "java");
+    }
+
+    public synchronized void save(String name, String hash, String salt, String ip,
+                                  boolean premium, String platform) {
         try (PreparedStatement ps = db.prepareStatement(
-                "INSERT OR REPLACE INTO users(name,hash,salt,ip,last_login,premium) VALUES(?,?,?,?,?,?)")) {
+                "INSERT OR REPLACE INTO users(name,hash,salt,ip,last_login,premium,platform) VALUES(?,?,?,?,?,?,?)")) {
             ps.setString(1, name.toLowerCase());
             ps.setString(2, hash);
             ps.setString(3, salt);
             ps.setString(4, ip);
             ps.setLong(5, System.currentTimeMillis());
             ps.setInt(6, premium ? 1 : 0);
+            ps.setString(7, platform == null ? "java" : platform);
             ps.executeUpdate();
         } catch (Exception e) {
             plugin.getLogger().warning("No se pudo guardar " + name);

@@ -29,6 +29,7 @@ public class RankMenu implements Listener {
     private static class Pending {
         String mc, dcId;
         boolean up;
+        boolean remove;
         int page;
     }
 
@@ -49,20 +50,33 @@ public class RankMenu implements Listener {
         p.mc = mc;
         p.dcId = dcId;
         p.up = up;
+        p.remove = false;
+        p.page = 0;
+        pending.put(executor.getUniqueId(), p);
+        draw(executor, p, current);
+    }
+
+    /** Modo quitar: el menú elige qué rango RETIRAR. */
+    public void openRemove(Player executor, String mc, String dcId, int current) {
+        Pending p = new Pending();
+        p.mc = mc;
+        p.dcId = dcId;
+        p.up = false;
+        p.remove = true;
         p.page = 0;
         pending.put(executor.getUniqueId(), p);
         draw(executor, p, current);
     }
 
     /** Cabeza personalizada con el nombre del rango. */
-    private ItemStack rankHead(SyncVinculacion.Rank r, int idx, int total, boolean current) {
+    private ItemStack rankHead(SyncVinculacion.Rank r, int idx, int total, boolean current, boolean remove) {
         ItemStack head = new ItemStack(Material.PLAYER_HEAD);
         org.bukkit.inventory.meta.SkullMeta m =
                 (org.bukkit.inventory.meta.SkullMeta) head.getItemMeta();
-        String mark = current ? " §e● actual" : "";
+        String mark = (!remove && current) ? " §e● actual" : "";
         m.setDisplayName("§f§l" + r.display + mark);
         m.setLore(Arrays.asList("§7Nivel " + (idx + 1) + "/" + total,
-                current ? "§cYa tiene este rango" : "§aClic para asignar"));
+                remove ? "§cClic para QUITAR este rango" : (current ? "§cYa tiene este rango" : "§aClic para asignar")));
         head.setItemMeta(m);
         return head;
     }
@@ -70,9 +84,9 @@ public class RankMenu implements Listener {
     private void draw(Player executor, Pending pen, int current) {
         java.util.List<SyncVinculacion.Rank> ladder = plugin.ladderView();
         int pages = (int) Math.ceil(ladder.size() / (double) PER_PAGE);
+        String head = pen.remove ? "§c§lQuitar rango a " : (pen.up ? "§a§lPromotear a " : "§c§lDemotear a ");
         Inventory inv = Bukkit.createInventory(executor, 27,
-                (pen.up ? "§a§lPromotear a " : "§c§lDemotear a ") + pen.mc
-                + " §8(" + (pen.page + 1) + "/" + pages + ")");
+                head + pen.mc + " §8(" + (pen.page + 1) + "/" + pages + ")");
         // Marco decorado
         ItemStack glass = new ItemStack(Material.GRAY_STAINED_GLASS_PANE);
         ItemMeta gm = glass.getItemMeta();
@@ -85,7 +99,7 @@ public class RankMenu implements Listener {
             int idx = start + i;
             if (idx >= ladder.size()) break;
             SyncVinculacion.Rank r = ladder.get(idx);
-            inv.setItem(SLOTS[i], rankHead(r, idx, ladder.size(), idx == current));
+            inv.setItem(SLOTS[i], rankHead(r, idx, ladder.size(), idx == current, pen.remove));
         }
         // Anterior
         if (pen.page > 0) {
@@ -124,7 +138,8 @@ public class RankMenu implements Listener {
     public void onClick(InventoryClickEvent e) {
         if (!(e.getWhoClicked() instanceof Player)) return;
         String title = e.getView().getTitle();
-        if (!title.startsWith("§a§lPromotear a ") && !title.startsWith("§c§lDemotear a ")) return;
+        if (!title.startsWith("§a§lPromotear a ") && !title.startsWith("§c§lDemotear a ")
+                && !title.startsWith("§c§lQuitar rango a ")) return;
         e.setCancelled(true);
         Player p = (Player) e.getWhoClicked();
         Pending pen = pending.get(p.getUniqueId());
@@ -154,14 +169,15 @@ public class RankMenu implements Listener {
         }
         for (int i = 0; i < ladder.size(); i++) {
             if (name.contains(ladder.get(i).display)) {
-                if (name.contains("● actual")) {
+                if (!pen.remove && name.contains("● actual")) {
                     p.sendMessage("§cYa tiene ese rango.");
                     return;
                 }
                 final int idx = i;
                 p.closeInventory();
                 pending.remove(p.getUniqueId());
-                plugin.applyRank(p, pen.mc, pen.dcId, idx, pen.up);
+                if (pen.remove) plugin.applyRemove(p, pen.mc, pen.dcId, idx);
+                else plugin.applyRank(p, pen.mc, pen.dcId, idx, pen.up);
                 return;
             }
         }

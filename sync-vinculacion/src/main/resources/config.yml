@@ -8,6 +8,11 @@ discord:
   guild-id: "000000000000000000"
   # Canal donde sale el selector de rangos (sincronizacion-discord)
   sync-channel-id: "1550726113662210159"
+  # Canal por tipo de mensaje (ID). Vacío = usa sync-channel-id.
+  channels:
+    links: ""
+    ranks: ""
+    unlinks: ""
   # Roles a mencionar al vincular (ej: Management). Vacío = sin mención.
   link-ping-role-ids:
     - "1550507371514691635"
@@ -44,3 +49,4 @@ messages:
   top-rank: "§cYa está en el rango máximo."
   bottom-rank: "§cYa está en el rango mínimo."
   no-rank: "§cEse jugador no tiene ningún rango de la escalera."
+  removed: "§c{jugador} perdió el rango {rango} (MC + Discord)."

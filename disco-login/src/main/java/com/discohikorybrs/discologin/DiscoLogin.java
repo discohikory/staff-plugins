@@ -294,14 +294,22 @@ public class DiscoLogin extends JavaPlugin implements CommandExecutor {
                 new net.md_5.bungee.api.chat.TextComponent[]{
                         new net.md_5.bungee.api.chat.TextComponent("§7Tengo MC comprado")}));
         net.md_5.bungee.api.chat.TextComponent no =
-                new net.md_5.bungee.api.chat.TextComponent("§c§l[✘ NO PREMIUM]");
+                new net.md_5.bungee.api.chat.TextComponent("§c§l[✘ NO PREMIUM] ");
         no.setClickEvent(new net.md_5.bungee.api.chat.ClickEvent(
                 net.md_5.bungee.api.chat.ClickEvent.Action.RUN_COMMAND, "/soy nopremium"));
         no.setHoverEvent(new net.md_5.bungee.api.chat.HoverEvent(
                 net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT,
                 new net.md_5.bungee.api.chat.TextComponent[]{
                         new net.md_5.bungee.api.chat.TextComponent("§7Juego sin MC comprado")}));
-        p.spigot().sendMessage(yes, no);
+        net.md_5.bungee.api.chat.TextComponent bed =
+                new net.md_5.bungee.api.chat.TextComponent("§b§l[🎮 BEDROCK]");
+        bed.setClickEvent(new net.md_5.bungee.api.chat.ClickEvent(
+                net.md_5.bungee.api.chat.ClickEvent.Action.RUN_COMMAND, "/soy bedrock"));
+        bed.setHoverEvent(new net.md_5.bungee.api.chat.HoverEvent(
+                net.md_5.bungee.api.chat.HoverEvent.Action.SHOW_TEXT,
+                new net.md_5.bungee.api.chat.TextComponent[]{
+                        new net.md_5.bungee.api.chat.TextComponent("§7Consola o móvil (Xbox/Play/Móvil)")}));
+        p.spigot().sendMessage(yes, no, bed);
     }
 
     @Override
@@ -321,13 +329,19 @@ public class DiscoLogin extends JavaPlugin implements CommandExecutor {
                     Bukkit.getScheduler().runTask(this, () -> {
                         if (!p.isOnline()) return;
                         if (ok) {
-                            auth.save(p.getName(), "", "", ipOf(p), true);
+                            auth.save(p.getName(), "", "", ipOf(p), true, "java");
                             forceLogin(p, msg("premium-welcome"));
                         } else {
                             p.sendMessage("§cNo eres premium. Regístrate: §6/register <clave> <clave>");
                         }
                     });
                 });
+                return true;
+            }
+            if (a[0].equalsIgnoreCase("bedrock")) {
+                // Bedrock (consola/móvil): sin clave, entra directo y queda marcado
+                auth.save(p.getName(), "", "", ipOf(p), false, "bedrock");
+                forceLogin(p, "§a¡Bienvenido Bedrock! 🎮");
                 return true;
             }
             p.sendMessage(msg("need-register"));
