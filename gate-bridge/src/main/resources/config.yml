@@ -1,0 +1,6 @@
+# ⚙️ GateBridge — configuración
+# © 2026 Discohikorybrs - Daniel Esteban Vera Fernandez.
+# Permiso que abre el menú 2FA. Se da SOLO tras logearse (moverse).
+gate-permission: "skylith.2fa.required"
+# Bloques horizontales a moverse para abrir la puerta
+min-distance-blocks: 2.0
