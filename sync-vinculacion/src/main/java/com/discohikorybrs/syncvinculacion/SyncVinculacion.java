@@ -18,16 +18,13 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Vincula MC↔Discord y sincroniza /promote y /demote con LuckPerms + Discord.
@@ -37,8 +34,6 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
 
     private LuckPerms luckPerms;
     private JDA jda;
-    private FileConfiguration links;
-    private File linksFile;
 
     public static class Rank {
         String group, display, roleId;
@@ -50,8 +45,6 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
     public void onEnable() {
         saveDefaultConfig();
         loadLadder();
-        linksFile = new File(getDataFolder(), "links.yml");
-        links = YamlConfiguration.loadConfiguration(linksFile);
         try {
             luckPerms = LuckPermsProvider.get();
         } catch (Exception e) {
@@ -78,6 +71,7 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
         getCommand("demote").setExecutor(this);
         menu = new RankMenu(this);
         getServer().getPluginManager().registerEvents(menu, this);
+        getServer().getPluginManager().registerEvents(new JoinCheck(this), this);
         // Cada 5 min: si un vinculado ya no tiene rango staff, se desvincula solo
         Bukkit.getScheduler().runTaskTimerAsynchronously(this, this::autoUnlinkCheck, 6000L, 6000L);
         getLogger().info("SyncVinculacion v1.0.0 por Discohikorybrs activado.");
@@ -220,29 +214,46 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
         });
     }
 
-    /** Busca la clave (uuid) vinculada a un nick de MC. */
-    private String keyOfMc(String mcName) {
-        for (String key : links.getKeys(false)) {
-            String mc = links.getString(key + ".mc");
-            if (mc != null && mc.equalsIgnoreCase(mcName)) return key;
+    /** Discord ID desde el meta de LuckPerms (compartido entre servidores). */
+    private String metaDiscord(net.luckperms.api.model.user.User u) {
+        try {
+            String v = u.getCachedData().getMetaData().getMetaValue("discord-id");
+            return (v == null || v.isEmpty()) ? null : v;
+        } catch (Exception e) {
+            return null;
         }
-        return null;
     }
 
-    /** Busca el Discord ID vinculado a un nick de MC (ignora mayúsculas). */
-    private String discordOf(String mcName) {
-        for (String key : links.getKeys(false)) {
-            String mc = links.getString(key + ".mc");
-            if (mc != null && mc.equalsIgnoreCase(mcName))
-                return links.getString(key + ".discord");
-        }
-        return null;
+    private void metaSet(UUID uuid, String dcId) {
+        UserManager um = luckPerms.getUserManager();
+        um.loadUser(uuid).thenAcceptAsync(u -> {
+            if (dcId == null) u.data().remove(Node.builder("discord-id").build());
+            else u.data().add(Node.builder("discord-id").value(dcId).build());
+            um.saveUser(u);
+        });
     }
 
-    @Override
-    public void onDisable() {
-        saveLinks();
-        if (jda != null) jda.shutdown();
+    /** ¿Tiene algún rango de la escalera? */
+    private boolean hasLadderRank(net.luckperms.api.model.user.User u) {
+        for (net.luckperms.api.node.Node n : u.getNodes()) {
+            if (!n.getKey().startsWith("group.")) continue;
+            String gname = n.getKey().substring(6);
+            for (Rank r : ladder) {
+                if (r.group.equalsIgnoreCase(gname)) return true;
+            }
+        }
+        return false;
+    }
+
+    /** Revisa UN jugador online: sin rango staff + vinculado = desvincular. */
+    void checkPlayer(Player p) {
+        UserManager um = luckPerms.getUserManager();
+        um.loadUser(p.getUniqueId()).thenAcceptAsync(u -> {
+            String dc = metaDiscord(u);
+            if (dc == null || hasLadderRank(u)) return;
+            Bukkit.getScheduler().runTask(this, () ->
+                    unlink(u.getUniqueId(), p.getName(), dc, "sin rango staff"));
+        });
     }
 
     private void loadLadder() {
@@ -257,12 +268,9 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
         }
     }
 
-    private void saveLinks() {
-        try {
-            links.save(linksFile);
-        } catch (IOException e) {
-            getLogger().warning("No se pudo guardar links.yml");
-        }
+    @Override
+    public void onDisable() {
+        if (jda != null) jda.shutdown();
     }
 
     private String msg(String path) {
@@ -389,6 +397,7 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
     @Override
     public boolean onCommand(CommandSender s, Command cmd, String label, String[] a) {
         String name = cmd.getName().toLowerCase();
+        UserManager um = luckPerms.getUserManager();
         if (name.equals("stafflinkdiscord")) {
             // /stafflinkdiscord remove <mc> — solo superiores (sync.admin)
             if (a.length >= 1 && a[0].equalsIgnoreCase("remove")) {
@@ -400,13 +409,25 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
                     s.sendMessage("§eUso: /stafflinkdiscord remove <nick-mc>");
                     return true;
                 }
-                String key = keyOfMc(a[1]);
-                if (key == null) {
-                    s.sendMessage(msg("not-linked").replace("{jugador}", a[1]));
-                    return true;
-                }
-                unlink(key, "desvinculado por un superior");
-                s.sendMessage(msg("unlinked").replace("{jugador}", a[1]));
+                final String target = a[1];
+                um.lookupUniqueId(target).thenAcceptAsync(opt -> {
+                    if (!opt.isPresent()) {
+                        sendSync(s, msg("not-linked").replace("{jugador}", target));
+                        return;
+                    }
+                    UUID id = opt.get();
+                    um.loadUser(id).thenAcceptAsync(u -> {
+                        String dc = metaDiscord(u);
+                        if (dc == null) {
+                            sendSync(s, msg("not-linked").replace("{jugador}", target));
+                            return;
+                        }
+                        Bukkit.getScheduler().runTask(this, () -> {
+                            unlink(id, target, dc, "desvinculado por un superior");
+                            s.sendMessage(msg("unlinked").replace("{jugador}", target));
+                        });
+                    });
+                });
                 return true;
             }
             if (!(s instanceof Player)) {
@@ -419,29 +440,31 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
                 if (a.length >= 1) p.sendMessage(msg("bad-id"));
                 return true;
             }
-            String prev = links.getString(p.getUniqueId() + ".discord");
-            if (prev != null && prev.equals(a[0])) {
-                // Ya vinculado: aviso por MD
-                p.sendMessage(msg("already-linked"));
-                if (jda != null) {
-                    final String id = a[0];
-                    Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
-                        try {
-                            jda.retrieveUserById(id).queue(u ->
-                                    u.openPrivateChannel().queue(ch ->
-                                            ch.sendMessage("ℹ️ Tu cuenta **" + p.getName()
-                                                    + "** ya está vinculada. Si no fuiste tú, avisa a un superior.")
-                                                    .queue(null, e -> {}), e -> {}));
-                        } catch (Exception ignored) {}
-                    });
-                }
-                return true;
-            }
-            links.set(p.getUniqueId() + ".discord", a[0]);
-            links.set(p.getUniqueId() + ".mc", p.getName());
-            saveLinks();
-            p.sendMessage(msg("linked"));
-            postLinkEmbed(p.getName(), a[0]);
+            final String id = a[0];
+            um.loadUser(p.getUniqueId()).thenAcceptAsync(u -> {
+                String prev = metaDiscord(u);
+                Bukkit.getScheduler().runTask(this, () -> {
+                    if (prev != null && prev.equals(id)) {
+                        // Ya vinculado: aviso por MD
+                        p.sendMessage(msg("already-linked"));
+                        if (jda != null) {
+                            Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+                                try {
+                                    jda.retrieveUserById(id).queue(us ->
+                                            us.openPrivateChannel().queue(ch ->
+                                                    ch.sendMessage("ℹ️ Tu cuenta **" + p.getName()
+                                                            + "** ya está vinculada. Si no fuiste tú, avisa a un superior.")
+                                                            .queue(null, e -> {}), e -> {}));
+                                } catch (Exception ignored) {}
+                            });
+                        }
+                        return;
+                    }
+                    metaSet(p.getUniqueId(), id);
+                    p.sendMessage(msg("linked"));
+                    postLinkEmbed(p.getName(), id);
+                });
+            });
             return true;
         }
 
@@ -456,32 +479,37 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
             }
             boolean up = name.equals("promote");
             String mc = a[0];
-            String dcId = discordOf(mc);
-            if (dcId == null) {
-                s.sendMessage(msg("need-link-many").replace("{jugador}", mc));
-                return true;
-            }
             Player p = (Player) s;
-            // Rango actual para marcarlo en el menú
-            luckPerms.getUserManager().loadUser(Bukkit.getOfflinePlayer(mc).getUniqueId())
-                    .thenAcceptAsync(u -> {
-                        int c = currentRank(u);
-                        Bukkit.getScheduler().runTask(this, () -> {
-                            if (up) menu.open(p, mc, dcId, true, c);
-                            else menu.openRemove(p, mc, dcId, c);
-                        });
+            um.lookupUniqueId(mc).thenAcceptAsync(opt -> {
+                if (!opt.isPresent()) {
+                    sendSync(s, msg("need-link-many").replace("{jugador}", mc));
+                    return;
+                }
+                um.loadUser(opt.get()).thenAcceptAsync(u -> {
+                    String dcId = metaDiscord(u);
+                    if (dcId == null) {
+                        sendSync(s, msg("need-link-many").replace("{jugador}", mc));
+                        return;
+                    }
+                    int c = currentRank(u);
+                    Bukkit.getScheduler().runTask(this, () -> {
+                        if (up) menu.open(p, mc, dcId, true, c);
+                        else menu.openRemove(p, mc, dcId, c);
                     });
+                });
+            });
             return true;
         }
         return false;
     }
 
-    /** Desvincula: borra registro, quita roles staff en Discord y avisa. */
-    public void unlink(String mcKey, String reason) {
-        String dcId = links.getString(mcKey + ".discord");
-        String mc = links.getString(mcKey + ".mc", mcKey);
-        links.set(mcKey, null);
-        saveLinks();
+    private void sendSync(CommandSender s, String m) {
+        Bukkit.getScheduler().runTask(this, () -> s.sendMessage(m));
+    }
+
+    /** Desvincula: borra meta, quita roles staff en Discord y avisa. */
+    public void unlink(UUID uuid, String mc, String dcId, String reason) {
+        metaSet(uuid, null);
         if (dcId == null) return;
         String guildId = getConfig().getString("discord.guild-id", "");
         Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
@@ -537,42 +565,23 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
         });
     }
 
-    /** Revisa vinculados sin rango staff y los desvincula. */
+    /** Revisa vinculados sin rango staff y los desvincula (online + al entrar). */
     private void autoUnlinkCheck() {
         try {
-            for (String key : new java.util.HashSet<>(links.getKeys(false))) {
-                String dcId = links.getString(key + ".discord");
-                String mc = links.getString(key + ".mc", key);
-                if (dcId == null) continue;
-                OfflinePlayer t = Bukkit.getOfflinePlayer(mc);
-                if (!t.hasPlayedBefore() && !t.isOnline()) continue;
-                final String fMc = mc;
-                luckPerms.getUserManager().loadUser(t.getUniqueId()).thenAccept(u -> {
-                    boolean staff = false;
-                    for (net.luckperms.api.node.Node n : u.getNodes()) {
-                        if (!n.getKey().startsWith("group.")) continue;
-                        String gname = n.getKey().substring(6);
-                        for (Rank r : ladder) {
-                            if (r.group.equalsIgnoreCase(gname)) {
-                                staff = true;
-                                break;
-                            }
-                        }
-                        if (staff) break;
-                    }
-                    if (!staff) {
-                        Bukkit.getScheduler().runTask(this, () ->
-                                unlink(key, "sin rango staff"));
-                    }
-                });
-            }
+            for (Player p : Bukkit.getOnlinePlayers()) checkPlayer(p);
         } catch (Exception e) {
             getLogger().warning("Auto-desvincular: " + e.getMessage());
         }
     }
 
     /** ID de Discord vinculado a un UUID de MC (para otros plugins). */
-    public String linkedDiscord(java.util.UUID uuid) {
-        return links.getString(uuid + ".discord");
+    public String linkedDiscord(UUID uuid) {
+        try {
+            net.luckperms.api.model.user.User u =
+                    luckPerms.getUserManager().loadUser(uuid).get();
+            return metaDiscord(u);
+        } catch (Exception e) {
+            return null;
+        }
     }
 }
