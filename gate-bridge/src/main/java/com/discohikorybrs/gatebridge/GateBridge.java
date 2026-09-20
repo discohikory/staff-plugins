@@ -41,8 +41,8 @@ public class GateBridge extends JavaPlugin implements Listener {
         Player p = e.getPlayer();
         joinLoc.put(p.getUniqueId(), p.getLocation().clone());
         granted.put(p.getUniqueId(), false);
-        // Sin permiso no hay menú antes del login
-        dispatch("lp user " + p.getName() + " permission unset " + perm);
+        // Negación explícita: pisa el permiso de grupos, sin menú antes del login
+        dispatch("lp user " + p.getName() + " permission set " + perm + " false");
     }
 
     @EventHandler
@@ -50,7 +50,7 @@ public class GateBridge extends JavaPlugin implements Listener {
         UUID u = e.getPlayer().getUniqueId();
         joinLoc.remove(u);
         granted.remove(u);
-        dispatch("lp user " + e.getPlayer().getName() + " permission unset " + perm);
+        dispatch("lp user " + e.getPlayer().getName() + " permission set " + perm + " false");
     }
 
     @EventHandler
