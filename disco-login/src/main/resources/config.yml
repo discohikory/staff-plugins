@@ -11,6 +11,16 @@ max-accounts-per-ip: 3
 session-days: 0
 # Premium entra sin clave (verifica con Mojang). Bedrock (.) nunca es premium.
 premium-auto-login: true
+# Puerta 2: permiso que abre el menú 2FA al logearse (solo no-premium).
+# Sin este permiso NO hay menú; premium nunca lo recibe (salta el SkylithAuth).
+gate-permission: "skylith.2fa.required"
+# Prefijo de Bedrock (Floodgate). Estos nunca son premium Mojang.
+bedrock-prefix: "."
+# Supabase: el bot registra premium/no-premium/bedrock de cada cuenta.
+supabase:
+  enabled: false
+  url: ""
+  key: ""
 # Nombre de este servidor (lobby, survival...) para sesiones compartidas
 server-name: "lobby"
 # Sesiones entre servidores (MySQL): logeado en uno = logeado en todos.

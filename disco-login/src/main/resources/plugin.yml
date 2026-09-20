@@ -12,6 +12,12 @@ commands:
   login:
     description: Inicia sesion.
     usage: /login <clave>
+  logout:
+    description: Cierra tu sesion (pide clave de nuevo).
+    usage: /logout
+  logout:
+    description: Cierra tu sesion (pide clave de nuevo).
+    usage: /logout
   changepassword:
     description: Cambia tu contrasena.
     usage: /changepassword <vieja> <nueva>
