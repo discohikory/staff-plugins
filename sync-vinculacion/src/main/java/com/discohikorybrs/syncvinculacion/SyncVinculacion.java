@@ -12,6 +12,7 @@ import net.luckperms.api.LuckPerms;
 import net.luckperms.api.LuckPermsProvider;
 import net.luckperms.api.model.user.UserManager;
 import net.luckperms.api.node.Node;
+import net.luckperms.api.node.types.MetaNode;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
@@ -94,13 +95,13 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
                     UserManager um = luckPerms.getUserManager();
                     final String fdc = dc;
                     um.loadUser(id).thenAcceptAsync(u -> {
-                        u.data().add(Node.builder("discord-id").value(fdc).build());
+                        u.data().add(MetaNode.builder("discord-id", fdc).build());
                         um.saveUser(u);
                     });
                     n++;
                 } catch (Exception ignored) {}
             }
-            File bak = new java.io.File(getDataFolder(), "links.yml.migrated");
+            java.io.File bak = new java.io.File(getDataFolder(), "links.yml.migrated");
             if (!f.renameTo(bak)) f.delete();
             getLogger().info("Migrados " + n + " vínculos a LuckPerms.");
         } catch (Exception e) {
@@ -258,8 +259,13 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
     private void metaSet(UUID uuid, String dcId) {
         UserManager um = luckPerms.getUserManager();
         um.loadUser(uuid).thenAcceptAsync(u -> {
-            if (dcId == null) u.data().remove(Node.builder("discord-id").build());
-            else u.data().add(Node.builder("discord-id").value(dcId).build());
+            for (Node n : new java.util.ArrayList<>(u.getNodes())) {
+                if (n instanceof MetaNode
+                        && ((MetaNode) n).getMetaKey().equals("discord-id")) {
+                    u.data().remove(n);
+                }
+            }
+            if (dcId != null) u.data().add(MetaNode.builder("discord-id", dcId).build());
             um.saveUser(u);
         });
     }
