@@ -72,9 +72,40 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
         menu = new RankMenu(this);
         getServer().getPluginManager().registerEvents(menu, this);
         getServer().getPluginManager().registerEvents(new JoinCheck(this), this);
+        migrateLinks();
         // Cada 5 min: si un vinculado ya no tiene rango staff, se desvincula solo
         Bukkit.getScheduler().runTaskTimerAsynchronously(this, this::autoUnlinkCheck, 6000L, 6000L);
         getLogger().info("SyncVinculacion v1.0.0 por Discohikorybrs activado.");
+    }
+
+    /** Migra links.yml viejo al meta de LuckPerms (una vez). */
+    private void migrateLinks() {
+        try {
+            java.io.File f = new java.io.File(getDataFolder(), "links.yml");
+            if (!f.exists()) return;
+            org.bukkit.configuration.file.FileConfiguration y =
+                    org.bukkit.configuration.file.YamlConfiguration.loadConfiguration(f);
+            int n = 0;
+            for (String key : y.getKeys(false)) {
+                String dc = y.getString(key + ".discord");
+                if (dc == null || dc.isEmpty()) continue;
+                try {
+                    UUID id = UUID.fromString(key);
+                    UserManager um = luckPerms.getUserManager();
+                    final String fdc = dc;
+                    um.loadUser(id).thenAcceptAsync(u -> {
+                        u.data().add(Node.builder("discord-id").value(fdc).build());
+                        um.saveUser(u);
+                    });
+                    n++;
+                } catch (Exception ignored) {}
+            }
+            File bak = new java.io.File(getDataFolder(), "links.yml.migrated");
+            if (!f.renameTo(bak)) f.delete();
+            getLogger().info("Migrados " + n + " vínculos a LuckPerms.");
+        } catch (Exception e) {
+            getLogger().warning("Migración links: " + e.getMessage());
+        }
     }
 
     private RankMenu menu;
