@@ -447,12 +447,11 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
                     return true;
                 }
                 final String target = a[1];
-                um.lookupUniqueId(target).thenAcceptAsync(opt -> {
-                    if (!opt.isPresent()) {
+                um.lookupUniqueId(target).thenAcceptAsync(id -> {
+                    if (id == null) {
                         sendSync(s, msg("not-linked").replace("{jugador}", target));
                         return;
                     }
-                    UUID id = opt.get();
                     um.loadUser(id).thenAcceptAsync(u -> {
                         String dc = metaDiscord(u);
                         if (dc == null) {
@@ -517,12 +516,12 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
             boolean up = name.equals("promote");
             String mc = a[0];
             Player p = (Player) s;
-            um.lookupUniqueId(mc).thenAcceptAsync(opt -> {
-                if (!opt.isPresent()) {
+            um.lookupUniqueId(mc).thenAcceptAsync(id -> {
+                if (id == null) {
                     sendSync(s, msg("need-link-many").replace("{jugador}", mc));
                     return;
                 }
-                um.loadUser(opt.get()).thenAcceptAsync(u -> {
+                um.loadUser(id).thenAcceptAsync(u -> {
                     String dcId = metaDiscord(u);
                     if (dcId == null) {
                         sendSync(s, msg("need-link-many").replace("{jugador}", mc));
