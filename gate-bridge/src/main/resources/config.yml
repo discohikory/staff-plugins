@@ -1,6 +1,25 @@
-# ⚙️ GateBridge — configuración
+# GateBridge — configuración
 # © 2026 Discohikorybrs - Daniel Esteban Vera Fernandez.
-# Permiso que abre el menú 2FA. Se da SOLO tras logearse (moverse).
+# Permiso que abre el menú 2FA. Se da SOLO a staff no-premium tras logearse.
 gate-permission: "skylith.2fa.required"
 # Bloques horizontales a moverse para abrir la puerta
 min-distance-blocks: 2.0
+# Escalera staff (el OP no cuenta, solo estos grupos)
+staff-groups:
+  - owner
+  - founder
+  - co-owner
+  - head-manager
+  - director-tecnico
+  - control-tecnico
+  - developer
+  - manager
+  - head-admin
+  - sradmin
+  - admin
+  - trial-admin
+  - moderator
+  - trial-mod
+  - srmod
+  - helper
+  - soporte-dc
