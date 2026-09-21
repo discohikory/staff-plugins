@@ -17,6 +17,10 @@
       <id>papermc</id>
       <url>https://repo.papermc.io/repository/maven-public/</url>
     </repository>
+    <repository>
+      <id>luckperms</id>
+      <url>https://repo.luckperms.net/</url>
+    </repository>
   </repositories>
   <dependencies>
     <dependency>
@@ -26,9 +30,9 @@
       <scope>provided</scope>
     </dependency>
     <dependency>
-      <groupId>net.milkbowl.vault</groupId>
-      <artifactId>VaultAPI</artifactId>
-      <version>1.7</version>
+      <groupId>net.luckperms</groupId>
+      <artifactId>api</artifactId>
+      <version>5.4</version>
       <scope>provided</scope>
     </dependency>
   </dependencies>

@@ -4,3 +4,4 @@ main: com.discohikorybrs.gatebridge.GateBridge
 api-version: '1.20'
 author: Discohikorybrs
 description: Otorga el permiso del menu 2FA solo cuando el jugador ya puede moverse (logeado).
+depend: [LuckPerms]

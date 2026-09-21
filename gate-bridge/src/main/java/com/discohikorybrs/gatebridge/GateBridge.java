@@ -8,9 +8,9 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
-import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
-import net.milkbowl.vault.permission.Permission;
+
+import java.util.List;
 
 import java.util.List;
 import java.util.Map;
@@ -29,7 +29,7 @@ public class GateBridge extends JavaPlugin implements Listener {
     private String perm;
     private double minDistance;
     private List<String> staffGroups;
-    private Permission vault;
+    private net.luckperms.api.LuckPerms luckPerms;
     private final Map<UUID, Location> joinLoc = new ConcurrentHashMap<>();
     private final Map<UUID, Boolean> granted = new ConcurrentHashMap<>();
     private final Map<UUID, Boolean> premiumCache = new ConcurrentHashMap<>();
@@ -41,11 +41,12 @@ public class GateBridge extends JavaPlugin implements Listener {
         minDistance = getConfig().getDouble("min-distance-blocks", 2.0);
         staffGroups = getConfig().getStringList("staff-groups");
         try {
-            RegisteredServiceProvider<Permission> rsp =
-                    getServer().getServicesManager().getRegistration(Permission.class);
-            if (rsp != null) vault = rsp.getProvider();
-        } catch (Exception ignored) {}
-        if (vault == null) getLogger().warning("Sin Vault: la puerta no detectará rangos.");
+            luckPerms = net.luckperms.api.LuckPermsProvider.get();
+        } catch (Exception e) {
+            getLogger().severe("LuckPerms no encontrado. Desactivando.");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
         getServer().getPluginManager().registerEvents(this, this);
         getLogger().info("GateBridge v1.0.0 por Discohikorybrs activado (" + perm + ").");
     }
@@ -94,12 +95,13 @@ public class GateBridge extends JavaPlugin implements Listener {
     /** Staff = grupo primario en la escalera. OP no cuenta. */
     private boolean isStaff(Player p) {
         try {
-            if (vault == null) return p.hasPermission("authstaff.required");
-            String[] groups = vault.getPlayerGroups(p);
-            for (String g : groups) {
-                for (String s : staffGroups) {
-                    if (s.equalsIgnoreCase(g)) return true;
-                }
+            if (luckPerms == null) return p.hasPermission("authstaff.required");
+            net.luckperms.api.model.user.User u =
+                    luckPerms.getUserManager().getUser(p.getUniqueId());
+            if (u == null) return false;
+            String primary = u.getPrimaryGroup();
+            for (String s : staffGroups) {
+                if (s.equalsIgnoreCase(primary)) return true;
             }
         } catch (Exception ignored) {}
         return false;
