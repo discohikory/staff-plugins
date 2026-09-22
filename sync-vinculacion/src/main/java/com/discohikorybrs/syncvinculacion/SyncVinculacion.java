@@ -620,15 +620,11 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
             Player p = (Player) s;
             um.lookupUniqueId(mc).thenAcceptAsync(id -> {
                 if (id == null) {
-                    sendSync(s, msg("need-link-many").replace("{jugador}", mc));
+                    sendSync(s, "§cJugador no encontrado (debe haber entrado al menos una vez).");
                     return;
                 }
                 um.loadUser(id).thenAcceptAsync(u -> {
-                    String dcId = metaDiscord(u);
-                    if (dcId == null) {
-                        sendSync(s, msg("need-link-many").replace("{jugador}", mc));
-                        return;
-                    }
+                    String dcId = metaDiscord(u); // null = sin vincular: solo MC
                     int c = currentRank(u);
                     Bukkit.getScheduler().runTask(this, () -> {
                         if (up) menu.open(p, mc, dcId, true, c);
