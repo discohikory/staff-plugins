@@ -343,7 +343,7 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
     }
 
     /** Discord ID desde el meta de LuckPerms (compartido entre servidores). */
-    private String metaDiscord(net.luckperms.api.model.user.User u) {
+    String metaDiscord(net.luckperms.api.model.user.User u) {
         try {
             String v = u.getCachedData().getMetaData().getMetaValue("discord-id");
             return (v == null || v.isEmpty()) ? null : v;
