@@ -18,7 +18,8 @@ import org.bukkit.OfflinePlayer;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
-import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.FileConfiguration;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
@@ -26,6 +27,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.io.File;
+import java.io.IOException;
 
 /**
  * Vincula MC↔Discord y sincroniza /promote y /demote con LuckPerms + Discord.
@@ -73,6 +76,15 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
         menu = new RankMenu(this);
         getServer().getPluginManager().registerEvents(menu, this);
         getServer().getPluginManager().registerEvents(new JoinCheck(this), this);
+        guard = new DiscordGuard(this);
+        getServer().getPluginManager().registerEvents(guard, this);
+        if (jda != null) {
+            try {
+                jda.addEventListener(guard);
+            } catch (Exception ignored) {}
+        }
+        ipsFile = new File(getDataFolder(), "ips.yml");
+        ips = YamlConfiguration.loadConfiguration(ipsFile);
         migrateLinks();
         // Cada 5 min: si un vinculado ya no tiene rango staff, se desvincula solo
         Bukkit.getScheduler().runTaskTimerAsynchronously(this, this::autoUnlinkCheck, 6000L, 6000L);
@@ -110,6 +122,90 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
     }
 
     private RankMenu menu;
+    private DiscordGuard guard;
+    private FileConfiguration ips;
+    private File ipsFile;
+
+    public JDA jda() {
+        return jda;
+    }
+
+    public LuckPerms luckPerms() {
+        return luckPerms;
+    }
+
+    /** ¿Tiene rango de la escalera? (OP no cuenta). */
+    public boolean isStaffRank(UUID uuid) {
+        try {
+            net.luckperms.api.model.user.User u =
+                    luckPerms.getUserManager().getUser(uuid);
+            if (u == null) {
+                u = luckPerms.getUserManager().loadUser(uuid).get();
+            }
+            return u != null && hasLadderRank(u);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    public String lastIp(UUID uuid) {
+        try {
+            return ips.getString(uuid.toString() + ".ip");
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public void rememberIp(UUID uuid, String ip) {
+        try {
+            ips.set(uuid.toString() + ".ip", ip);
+            ips.save(ipsFile);
+        } catch (IOException e) {
+            getLogger().warning("No se pudo guardar ips.yml");
+        }
+    }
+
+    /** Quita todos los rangos staff y deja en default (solo tras fallar verificación). */
+    public void demoteToDefault(UUID uuid, String mc) {
+        UserManager um = luckPerms.getUserManager();
+        um.loadUser(uuid).thenAcceptAsync(u -> {
+            for (Rank r : ladder) u.data().remove(Node.builder("group." + r.group).build());
+            try {
+                u.setPrimaryGroup("default");
+            } catch (Exception ignored) {}
+            um.saveUser(u);
+        });
+        getLogger().warning("DEMOTE seguridad: " + mc + " sin rango staff.");
+    }
+
+    /** Alerta al webhook de fallos + ping al rol. */
+    public void alertWebhook(String mc, String reason) {
+        String url = getConfig().getString("guard.webhook-failed", "");
+        if (url == null || url.isEmpty()) {
+            getLogger().warning("ALERTA " + mc + ": " + reason + " (sin webhook)");
+            return;
+        }
+        String role = getConfig().getString("guard.ping-role-id", "");
+        Bukkit.getScheduler().runTaskAsynchronously(this, () -> {
+            try {
+                String content = (role == null || role.isEmpty()) ? "" : "<@&" + role + ">";
+                String json = "{\"content\":\"" + content.replace("\"", "") + "\",\"embeds\":[{"
+                        + "\"title\":\"Alerta 2FA: " + mc.replace("\"", "") + "\","
+                        + "\"description\":\"" + reason.replace("\"", "") + "\","
+                        + "\"color\":15548997}]}";
+                java.net.HttpURLConnection c = (java.net.HttpURLConnection)
+                        new java.net.URL(url).openConnection();
+                c.setRequestMethod("POST");
+                c.setRequestProperty("Content-Type", "application/json");
+                c.setDoOutput(true);
+                c.getOutputStream().write(json.getBytes("UTF-8"));
+                c.getResponseCode();
+                c.disconnect();
+            } catch (Exception e) {
+                getLogger().warning("Webhook: " + e.getMessage());
+            }
+        });
+    }
 
     /** Vista de la escalera para el menú. */
     public java.util.List<Rank> ladderView() {
@@ -341,6 +437,13 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
         });
     }
 
+    /** Completa un vínculo confirmado con código. */
+    public void finishLink(Player p, String dcId) {
+        metaSet(p.getUniqueId(), dcId);
+        p.sendMessage(msg("linked"));
+        postLinkEmbed(p.getName(), dcId);
+    }
+
     /** Embed de vinculación estilo premium: canal sync + MD, en español. */
     private void postLinkEmbed(String mc, String dcId) {
         if (jda == null) return;
@@ -496,9 +599,8 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
                         }
                         return;
                     }
-                    metaSet(p.getUniqueId(), id);
-                    p.sendMessage(msg("linked"));
-                    postLinkEmbed(p.getName(), id);
+                    // Nuevo vínculo: código por MD para confirmar en juego
+                    guard.startLink(p, id);
                 });
             });
             return true;

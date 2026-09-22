@@ -13,6 +13,15 @@ discord:
     links: ""
     ranks: ""
     unlinks: ""
+# Guardia 2FA por Discord (reemplazo del TOTP)
+guard:
+  enabled: true
+  # Fallos antes de kick + demote (solo tras fallar verificación, nunca solo por IP)
+  max-fails: 3
+  # Webhook de alertas de fallos (vacío = solo consola)
+  webhook-failed: ""
+  # Rol a mencionar en la alerta
+  ping-role-id: "1550507371514691635"
   # Roles a mencionar al vincular (ej: Management). Vacío = sin mención.
   link-ping-role-ids:
     - "1550507371514691635"
