@@ -76,7 +76,13 @@ public class DiscordGuard extends ListenerAdapter implements Listener {
                         ch.sendMessageEmbeds(new EmbedBuilder()
                                 .setTitle("🔗 Código de vinculación")
                                 .setDescription("Tu código para **" + p.getName() + "** es:\n\n# `" + code + "`\n\nEscríbelo en el juego. Caduca en 5 minutos.")
-                                .setColor(new Color(0x2effa1)).build()).queue(null, e -> {}), e -> {}));
+                                .setColor(new Color(0x2effa1)).build()).queue(null, e -> {
+                                    Bukkit.getScheduler().runTask(plugin, () ->
+                                            p.sendMessage("§cNo pude abrirte MD (¿los tienes cerrados?). Ábrelos e intenta de nuevo."));
+                                }), e -> {
+                                    Bukkit.getScheduler().runTask(plugin, () ->
+                                            p.sendMessage("§cEse ID de Discord no existe. Revisa el ID."));
+                                }));
     }
 
     /** Paso 2: confirma el código escrito en el chat. Devuelve el DC ID si OK. */
