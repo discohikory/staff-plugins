@@ -22,6 +22,9 @@ guard:
   webhook-failed: ""
   # Rol a mencionar en la alerta
   ping-role-id: "1550507371514691635"
+# Bedrock (móvil/IP cambiante): no se congela por IP, solo pide vínculo
+bedrock-skip-ip-check: true
+bedrock-prefix: "."
   # Roles a mencionar al vincular (ej: Management). Vacío = sin mención.
   link-ping-role-ids:
     - "1550507371514691635"
@@ -31,18 +34,20 @@ guard:
 # Escalera de rangos de MENOR a MAYOR. Deben existir en LuckPerms.
 # discord-role-id: ID del rol de Discord correspondiente ("" = no tocar).
 ladder:
-  - { group: "jr-helper", display: "Jr-Helper", discord-role-id: "" }
   - { group: "helper", display: "Helper", discord-role-id: "" }
-  - { group: "jr-mod", display: "Jr-Mod", discord-role-id: "" }
-  - { group: "mod", display: "Mod", discord-role-id: "" }
-  - { group: "sr-mod", display: "Sr-Mod", discord-role-id: "" }
-  - { group: "t-admin", display: "T-Admin", discord-role-id: "" }
+  - { group: "jr-mod", display: "Jr.Mod", discord-role-id: "" }
+  - { group: "moderator", display: "Moderador", discord-role-id: "" }
+  - { group: "sr-mod", display: "Sr. Mod", discord-role-id: "" }
+  - { group: "jr-admin", display: "Jr.Admin", discord-role-id: "" }
   - { group: "admin", display: "Admin", discord-role-id: "" }
-  - { group: "sr-admin", display: "Sr-Admin", discord-role-id: "" }
+  - { group: "head-admin", display: "Head Admin", discord-role-id: "" }
   - { group: "manager", display: "Manager", discord-role-id: "" }
-  - { group: "head-manager", display: "Head manager", discord-role-id: "" }
+  - { group: "developer", display: "Developer", discord-role-id: "" }
+  - { group: "control-tecnico", display: "Control Tecnico", discord-role-id: "" }
+  - { group: "director-tecnico", display: "Director Tecnico", discord-role-id: "" }
+  - { group: "head-manager", display: "Head Manager", discord-role-id: "" }
+  - { group: "founder", display: "Founder", discord-role-id: "" }
   - { group: "owner", display: "Owner", discord-role-id: "" }
-
 messages:
   prefix: "§6[Sync] §r"
   usage-link: "§eUso: /stafflinkdiscord <tu-id-de-discord>"

@@ -558,7 +558,7 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
                     return true;
                 }
                 final String target = a[1];
-                um.lookupUniqueId(target).thenAcceptAsync(id -> {
+                resolveUuid(target, id -> {
                     if (id == null) {
                         sendSync(s, msg("not-linked").replace("{jugador}", target));
                         return;
@@ -626,7 +626,7 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
             boolean up = name.equals("promote");
             String mc = a[0];
             Player p = (Player) s;
-            um.lookupUniqueId(mc).thenAcceptAsync(id -> {
+            resolveUuid(mc, id -> {
                 if (id == null) {
                     sendSync(s, "§cJugador no encontrado (debe haber entrado al menos una vez).");
                     return;
@@ -712,6 +712,25 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
         } catch (Exception e) {
             getLogger().warning("Auto-desvincular: " + e.getMessage());
         }
+    }
+
+    /** Resuelve UUID: jugador online primero (Bedrock incluido), luego LuckPerms. */
+    private void resolveUuid(String mc, java.util.function.Consumer<UUID> done) {
+        Player online = Bukkit.getPlayerExact(mc);
+        if (online != null) {
+            done.accept(online.getUniqueId());
+            return;
+        }
+        luckPerms.getUserManager().lookupUniqueId(mc).thenAcceptAsync(id -> {
+            Bukkit.getScheduler().runTask(this, () -> done.accept(id));
+        });
+    }
+
+    /** ¿Es Bedrock? UUID Floodgate (ceros) o prefijo configurado. */
+    boolean isBedrock(String mc, UUID uuid) {
+        if (uuid != null && uuid.toString().startsWith("00000000-0000-0000")) return true;
+        String pre = getConfig().getString("bedrock-prefix", ".");
+        return pre != null && !pre.isEmpty() && mc.startsWith(pre);
     }
 
     /** ID de Discord vinculado a un UUID de MC (para otros plugins). */

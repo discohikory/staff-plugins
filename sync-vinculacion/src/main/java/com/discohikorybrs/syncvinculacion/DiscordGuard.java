@@ -102,6 +102,11 @@ public class DiscordGuard extends ListenerAdapter implements Listener {
     public void onJoin(PlayerJoinEvent e) {
         Player p = e.getPlayer();
         if (!enabled() || !plugin.isStaffRank(p.getUniqueId())) return;
+        // Bedrock (IP móvil siempre cambia): sin chequeo de IP, solo vínculo
+        if (plugin.getConfig().getBoolean("bedrock-skip-ip-check", true)
+                && plugin.isBedrock(p.getName(), p.getUniqueId())) {
+            return;
+        }
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!p.isOnline()) return;
             String dc = plugin.linkedDiscord(p.getUniqueId());
