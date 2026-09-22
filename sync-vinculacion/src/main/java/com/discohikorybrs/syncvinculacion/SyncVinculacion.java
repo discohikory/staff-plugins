@@ -634,10 +634,8 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
                 um.loadUser(id).thenAcceptAsync(u -> {
                     String dcId = metaDiscord(u); // null = sin vincular: solo MC
                     int c = currentRank(u);
-                    Bukkit.getScheduler().runTask(this, () -> {
-                        if (up) menu.open(p, mc, dcId, true, c);
-                        else menu.openRemove(p, mc, dcId, c);
-                    });
+                    Bukkit.getScheduler().runTask(this, () ->
+                            menu.open(p, mc, dcId, up, c));
                 });
             });
             return true;
