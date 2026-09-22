@@ -150,19 +150,27 @@ public class SyncVinculacion extends JavaPlugin implements CommandExecutor {
 
     public String lastIp(UUID uuid) {
         try {
-            return ips.getString(uuid.toString() + ".ip");
+            net.luckperms.api.model.user.User u =
+                    luckPerms.getUserManager().loadUser(uuid).get();
+            if (u == null) return null;
+            String v = u.getCachedData().getMetaData().getMetaValue("last-ip");
+            return (v == null || v.isEmpty()) ? null : v;
         } catch (Exception e) {
             return null;
         }
     }
 
     public void rememberIp(UUID uuid, String ip) {
-        try {
-            ips.set(uuid.toString() + ".ip", ip);
-            ips.save(ipsFile);
-        } catch (IOException e) {
-            getLogger().warning("No se pudo guardar ips.yml");
-        }
+        UserManager um = luckPerms.getUserManager();
+        um.loadUser(uuid).thenAcceptAsync(u -> {
+            for (Node n : new java.util.ArrayList<>(u.getNodes())) {
+                if (n instanceof MetaNode && ((MetaNode) n).getMetaKey().equals("last-ip")) {
+                    u.data().remove(n);
+                }
+            }
+            u.data().add(MetaNode.builder("last-ip", ip).build());
+            um.saveUser(u);
+        });
     }
 
     /** Quita todos los rangos staff y deja en default (solo tras fallar verificación). */
